@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NeuroMPR PACS — Sign in</title>
+<style>
+  :root{ --bg:#08090c; --panel:#101319; --panel2:#161a22; --line:#2a3040; --text:#cdd5e0; --dim:#6b7282; --faint:#454c5c;
+         --amber:#ffb000; --amber-dim:#8a6000; --cyan:#39d8ff; --cyan-dim:#1c6e80; --danger:#ff5d5d;
+         --mono:'Roboto Mono','SFMono-Regular',Consolas,monospace; --sans:'Inter',-apple-system,'Segoe UI',sans-serif; }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;background:radial-gradient(circle at 50% 35%,#11151d 0,#08090c 60%);color:var(--text);font-family:var(--sans);}
+  .wrap{min-height:100%;display:flex;align-items:center;justify-content:center;padding:24px 16px;}
+  .card{width:100%;max-width:380px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:26px 24px 22px;
+        box-shadow:0 30px 80px #000a;}
+  .brand{display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:15px;letter-spacing:3px;color:var(--amber);font-weight:700;}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--amber);box-shadow:0 0 10px var(--amber);}
+  .sub{font-family:var(--mono);font-size:10px;letter-spacing:1.5px;color:var(--faint);margin:6px 0 20px;text-transform:uppercase;}
+  h1{font-size:15px;margin:0 0 4px;font-weight:600;}
+  p.hint{font-size:12px;color:var(--dim);margin:0 0 16px;line-height:1.5;}
+  label{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:1.2px;color:var(--dim);text-transform:uppercase;margin:12px 0 5px;}
+  input{width:100%;background:var(--bg);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:9px 10px;font-size:13px;outline:none;}
+  input:focus{border-color:var(--cyan-dim);}
+  button{width:100%;margin-top:20px;background:#062a26;border:1px solid var(--cyan-dim);color:var(--cyan);padding:10px;border-radius:7px;
+         font-size:13px;font-weight:600;cursor:pointer;font-family:var(--sans);}
+  button:hover{background:#08352f;}
+  button:disabled{opacity:.5;cursor:wait;}
+  .err{color:var(--danger);font-size:12px;margin-top:12px;min-height:16px;}
+  .foot{font-family:var(--mono);font-size:9px;color:var(--faint);text-align:center;margin-top:18px;letter-spacing:1px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <form class="card" id="form" autocomplete="on">
+    <div class="brand"><span class="dot"></span>NEUROMPR PACS</div>
+    <div class="sub">Brain MRI archive · viewer · reporting</div>
+    <h1 id="title">Sign in</h1>
+    <p class="hint" id="hint">Use the account your PACS administrator created for you.</p>
+    <div id="nameRow" style="display:none;">
+      <label for="fullName">Full name (shown on signed reports)</label>
+      <input id="fullName" autocomplete="name" placeholder="Dr A. Example">
+    </div>
+    <label for="username">Username</label>
+    <input id="username" autocomplete="username" required autofocus>
+    <label for="password">Password</label>
+    <input id="password" type="password" autocomplete="current-password" required>
+    <div id="confirmRow" style="display:none;">
+      <label for="password2">Confirm password</label>
+      <input id="password2" type="password" autocomplete="new-password">
+    </div>
+    <button type="submit" id="go">Sign in</button>
+    <div class="err" id="err"></div>
+    <div class="foot">RESEARCH PROTOTYPE · NOT FOR CLINICAL USE</div>
+  </form>
+</div>
+<script>
+(async function(){
+  const $ = id => document.getElementById(id);
+  let setup = location.pathname === "/setup";
+  try{
+    const me = await (await fetch("/api/me")).json();
+    if (me.user && !setup){ location.href = nextUrl(); return; }
+    setup = !!me.setup_required;
+    if (!me.require_login){ location.href = "/"; return; }
+  }catch(e){}
+  if (setup){
+    $("title").textContent = "Create the administrator account";
+    $("hint").textContent = "First start: this account manages users, datasets and DICOM settings. Choose a strong password (8+ characters).";
+    $("nameRow").style.display = "block"; $("confirmRow").style.display = "block";
+    $("password").autocomplete = "new-password";
+    $("go").textContent = "Create account and continue";
+  }
+  function nextUrl(){
+    const n = new URLSearchParams(location.search).get("next") || "/";
+    return n.startsWith("/") && !n.startsWith("//") ? n : "/";
+  }
+  $("form").onsubmit = async e=>{
+    e.preventDefault();
+    $("err").textContent = "";
+    const body = {username: $("username").value.trim(), password: $("password").value};
+    if (setup){
+      if ($("password").value !== $("password2").value){ $("err").textContent = "The two passwords don't match."; return; }
+      body.full_name = $("fullName").value.trim();
+    }
+    $("go").disabled = true;
+    try{
+      const r = await fetch(setup ? "/api/setup" : "/api/login", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)});
+      const j = await r.json();
+      if (!r.ok){ $("err").textContent = j.error || "Sign-in failed."; return; }
+      location.href = nextUrl();
+    }catch(err){ $("err").textContent = "Can't reach the server: " + err; }
+    finally{ $("go").disabled = false; }
+  };
+})();
+</script>
+</body>
+</html>

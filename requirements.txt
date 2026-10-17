@@ -1,0 +1,14 @@
+# NeuroMPR PACS
+flask>=2.3
+numpy
+scipy
+nibabel
+opencv-python-headless
+# DICOM import / export and network (C-STORE, C-ECHO, C-FIND, C-GET, C-MOVE); the PACS runs without them
+pydicom>=3.0
+pynetdicom>=2.1
+# JPEG / JPEG 2000 compressed DICOM from scanners:
+# pylibjpeg pylibjpeg-libjpeg pylibjpeg-openjpeg
+# optional: model segmentation (set MODEL_PATH in app.py)
+# torch
+# monai

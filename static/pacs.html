@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NeuroMPR PACS — Worklist</title>
+<style>
+  :root{
+    --bg-void:#08090c; --bg-panel:#101319; --bg-panel-2:#161a22; --bg-row:#0d1016; --bg-row-hover:#131823; --bg-sel:#10202a;
+    --line:#1c212b; --line-strong:#2a3040;
+    --text:#cdd5e0; --text-dim:#7b8292; --text-faint:#4d5464;
+    --amber:#ffb000; --amber-dim:#8a6000; --cyan:#39d8ff; --cyan-dim:#1c6e80; --danger:#ff5d5d; --green:#6bcb77;
+    --mono:'Roboto Mono','SFMono-Regular',Consolas,monospace;
+    --sans:'Inter',-apple-system,'Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;background:var(--bg-void);color:var(--text);font-family:var(--sans);font-size:12.5px;overflow:hidden;}
+  button,input,select,textarea{font-family:inherit;font-size:12px;}
+  .app{display:flex;flex-direction:column;height:100vh;}
+
+  /* top bar */
+  .top{display:flex;align-items:center;gap:10px;height:50px;min-height:50px;padding:0 14px;border-bottom:1px solid var(--line-strong);
+    background:linear-gradient(180deg,#12151c,#0d0f14);}
+  .brand{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:13px;letter-spacing:2.5px;color:var(--amber);font-weight:700;white-space:nowrap;}
+  .brand .dot{width:8px;height:8px;border-radius:50%;background:var(--amber);box-shadow:0 0 9px var(--amber);}
+  .brand small{color:var(--text-faint);font-weight:400;letter-spacing:2px;}
+  .search{flex:0 1 420px;position:relative;}
+  .search input{width:100%;padding:8px 11px 8px 30px;}
+  .search::before{content:"⌕";position:absolute;left:10px;top:50%;transform:translateY(-52%);color:var(--text-faint);font-size:15px;}
+  input[type=text],input[type=search],input[type=password],input[type=date],input[type=number],select,textarea{
+    background:var(--bg-panel-2);border:1px solid var(--line-strong);color:var(--text);border-radius:6px;padding:6px 8px;outline:none;}
+  input:focus,select:focus,textarea:focus{border-color:var(--cyan-dim);}
+  input[type=date]{color-scheme:dark;padding:5px 6px;}
+  .lbl{font-family:var(--mono);font-size:9px;letter-spacing:1.4px;color:var(--text-faint);text-transform:uppercase;white-space:nowrap;}
+  .spacer{flex:1;}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;background:var(--bg-panel-2);border:1px solid var(--line-strong);color:var(--text);
+    padding:6px 11px;border-radius:6px;cursor:pointer;font-weight:600;white-space:nowrap;}
+  .btn:hover{border-color:var(--cyan-dim);color:var(--cyan);}
+  .btn.primary{background:#062a26;border-color:var(--cyan-dim);color:var(--cyan);}
+  .btn.amber{background:#2a1f06;border-color:var(--amber-dim);color:var(--amber);}
+  .btn.danger{color:var(--danger);border-color:#5a2424;}
+  .btn.small{padding:3px 8px;font-size:11px;}
+  .btn:disabled{opacity:.4;cursor:not-allowed;}
+  .scanInfo{font-family:var(--mono);font-size:10px;color:var(--amber);white-space:nowrap;}
+  .userWrap{position:relative;}
+  .menu{position:absolute;right:0;top:36px;background:var(--bg-panel);border:1px solid var(--line-strong);border-radius:8px;min-width:190px;
+    box-shadow:0 14px 40px #000c;display:none;z-index:60;padding:5px;}
+  .menu.show{display:block;}
+  .menu button{display:block;width:100%;text-align:left;background:none;border:none;color:var(--text);padding:8px 10px;border-radius:5px;cursor:pointer;}
+  .menu button:hover{background:var(--bg-panel-2);color:var(--cyan);}
+  .menu .who{padding:7px 10px 8px;border-bottom:1px solid var(--line-strong);margin-bottom:4px;font-size:11px;color:var(--text-dim);}
+
+  /* layout */
+  .main{flex:1;display:flex;min-height:0;}
+  .side{width:208px;min-width:208px;border-right:1px solid var(--line-strong);background:var(--bg-panel);overflow-y:auto;padding:10px 8px 20px;}
+  .side h4{font-family:var(--mono);font-size:9px;letter-spacing:1.8px;color:var(--text-faint);text-transform:uppercase;margin:14px 8px 5px;font-weight:600;}
+  .side h4:first-child{margin-top:4px;}
+  .fitem{display:flex;justify-content:space-between;align-items:center;padding:6px 9px;border-radius:6px;cursor:pointer;color:var(--text-dim);gap:8px;}
+  .fitem:hover{background:var(--bg-panel-2);color:var(--text);}
+  .fitem.on{background:#062a26;color:var(--cyan);}
+  .fitem .n{font-family:var(--mono);font-size:10px;color:var(--text-faint);}
+  .fitem.on .n{color:var(--cyan);}
+  .fitem .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .list{flex:1;display:flex;flex-direction:column;min-width:0;}
+  .listHead{display:flex;align-items:center;gap:12px;padding:8px 14px;border-bottom:1px solid var(--line-strong);min-height:40px;}
+  .listHead .count{font-family:var(--mono);font-size:11px;color:var(--text-dim);}
+  .listHead .count b{color:var(--text);}
+  .chk{display:inline-flex;align-items:center;gap:6px;color:var(--text-dim);cursor:pointer;font-size:11.5px;}
+  .chk input{accent-color:var(--cyan);margin:0;}
+  .tableWrap{flex:1;overflow:auto;}
+  table{width:100%;border-collapse:collapse;}
+  thead th{position:sticky;top:0;background:#0f1218;z-index:2;text-align:left;font-family:var(--mono);font-size:9px;letter-spacing:1.3px;
+    color:var(--text-faint);text-transform:uppercase;font-weight:600;padding:8px 7px;border-bottom:1px solid var(--line-strong);white-space:nowrap;user-select:none;}
+  thead th.sort{cursor:pointer;}
+  thead th.sort:hover{color:var(--text);}
+  thead th.active{color:var(--cyan);}
+  tbody tr{background:var(--bg-row);cursor:pointer;}
+  tbody tr:nth-child(even){background:#0b0e13;}
+  tbody tr:hover{background:var(--bg-row-hover);}
+  tbody tr.sel{background:var(--bg-sel);box-shadow:inset 3px 0 0 var(--cyan);}
+  tbody td{padding:7px 7px;border-bottom:1px solid var(--line);white-space:nowrap;vertical-align:middle;}
+  td.pid{font-family:var(--mono);font-weight:600;color:var(--text);letter-spacing:.3px;}
+  td.dim{color:var(--text-dim);}
+  td.num{font-family:var(--mono);text-align:right;}
+  td.desc{max-width:170px;overflow:hidden;text-overflow:ellipsis;color:var(--text-dim);}
+  td.missing .pid{text-decoration:line-through;}
+  .star{color:var(--text-faint);font-size:14px;line-height:1;}
+  .star.on{color:var(--amber);}
+  .chip{display:inline-block;font-family:var(--mono);font-size:9px;letter-spacing:.8px;text-transform:uppercase;padding:2px 7px;border-radius:10px;
+    border:1px solid var(--line-strong);color:var(--text-dim);white-space:nowrap;}
+  .chip.unread{color:#a8bbff;border-color:#34407a;background:#111833;}
+  .chip.opened{color:var(--text-dim);}
+  .chip.draft{color:var(--amber);border-color:var(--amber-dim);}
+  .chip.preliminary{color:#ffcf6b;border-color:#8a6000;background:#2a1f06;}
+  .chip.final,.chip.addendum{color:var(--green);border-color:#2f6b36;background:#0d2412;}
+  .chip.stat{color:#fff;background:#8f1d1d;border-color:#c33;}
+  .chip.urgent{color:#ffb4ac;border-color:#a33;}
+  .ser{display:inline-block;font-family:var(--mono);font-size:9px;padding:1px 4px;border-radius:3px;margin-right:2px;
+    background:#121722;color:var(--text-dim);border:1px solid #1f2533;}
+  .ser.seg{color:#ff8a8a;border-color:#5a2424;}
+  td img.th{width:44px;height:44px;border-radius:4px;display:block;background:#000;object-fit:cover;}
+  .pager{display:flex;align-items:center;gap:6px;padding:8px 14px;border-top:1px solid var(--line-strong);font-family:var(--mono);font-size:11px;color:var(--text-dim);}
+  .pager .btn{padding:3px 9px;}
+  .empty{padding:40px 20px;text-align:center;color:var(--text-faint);line-height:1.7;}
+
+  /* detail panel */
+  .detail{width:360px;min-width:360px;border-left:1px solid var(--line-strong);background:var(--bg-panel);overflow-y:auto;}
+  .dEmpty{padding:40px 24px;color:var(--text-faint);text-align:center;line-height:1.7;}
+  .dHead{display:flex;gap:12px;padding:14px;border-bottom:1px solid var(--line-strong);}
+  .dHead img{width:120px;height:120px;border-radius:7px;background:#000;border:1px solid var(--line-strong);flex:none;}
+  .dHead .pid{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--text);word-break:break-all;}
+  .dHead .nm{color:var(--text-dim);margin:3px 0 8px;}
+  .dActions{display:flex;flex-wrap:wrap;gap:6px;padding:11px 14px;border-bottom:1px solid var(--line-strong);}
+  .dSec{padding:11px 14px;border-bottom:1px solid var(--line-strong);}
+  .dSec h5{font-family:var(--mono);font-size:9px;letter-spacing:1.8px;color:var(--amber);text-transform:uppercase;margin:0 0 8px;font-weight:600;
+    display:flex;justify-content:space-between;align-items:center;}
+  .kv{display:grid;grid-template-columns:96px 1fr;gap:5px 8px;align-items:center;}
+  .kv .k{font-family:var(--mono);font-size:9px;letter-spacing:1px;color:var(--text-faint);text-transform:uppercase;}
+  .kv .v{color:var(--text);min-width:0;overflow-wrap:anywhere;}
+  .kv input,.kv select{width:100%;padding:4px 7px;font-size:11.5px;}
+  .kv input[type=checkbox]{width:auto;}
+  .mono{font-family:var(--mono);font-size:10.5px;}
+  .row2{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid #ffffff06;font-size:11.5px;}
+  .row2:last-child{border-bottom:none;}
+  .row2 a{color:var(--cyan);text-decoration:none;font-family:var(--mono);font-size:10.5px;}
+  .row2 .sm{font-family:var(--mono);font-size:9.5px;color:var(--text-faint);}
+  .row2.link{cursor:pointer;}
+  .row2.link:hover{color:var(--cyan);}
+  .note{font-size:11px;color:var(--text-faint);line-height:1.5;}
+  .ddWrap{position:relative;display:inline-block;}
+
+  /* modals */
+  .scrim{position:fixed;inset:0;background:#000b;backdrop-filter:blur(2px);z-index:100;display:none;align-items:center;justify-content:center;padding:20px;}
+  .scrim.show{display:flex;}
+  .modal{width:min(860px,100%);max-height:min(760px,92vh);background:var(--bg-panel);border:1px solid var(--line-strong);border-radius:11px;
+    display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 80px #000b;}
+  .modal.small{width:min(420px,100%);}
+  .mHead{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line-strong);background:linear-gradient(180deg,#12151c,#0d0f14);}
+  .mHead .t{font-family:var(--mono);font-size:12px;letter-spacing:2px;color:var(--amber);text-transform:uppercase;}
+  .mClose{margin-left:auto;background:none;border:none;color:var(--text-faint);font-size:20px;cursor:pointer;}
+  .mClose:hover{color:var(--text);}
+  .tabs{display:flex;gap:2px;padding:0 12px;border-bottom:1px solid var(--line-strong);background:#0d0f14;}
+  .tab{padding:9px 13px;cursor:pointer;color:var(--text-dim);border-bottom:2px solid transparent;font-weight:600;}
+  .tab.on{color:var(--cyan);border-bottom-color:var(--cyan);}
+  .mBody{flex:1;overflow-y:auto;padding:16px;}
+  .pane{display:none;}
+  .pane.on{display:block;}
+  .form{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin:10px 0;}
+  .form label{display:flex;flex-direction:column;gap:4px;}
+  .grid{width:100%;border-collapse:collapse;margin-top:8px;}
+  .grid th{text-align:left;font-family:var(--mono);font-size:9px;letter-spacing:1px;color:var(--text-faint);text-transform:uppercase;padding:6px 8px;border-bottom:1px solid var(--line-strong);}
+  .grid td{padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:middle;}
+  .statGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;}
+  .stat{background:var(--bg-panel-2);border:1px solid var(--line-strong);border-radius:8px;padding:10px 12px;}
+  .stat .t{font-family:var(--mono);font-size:9px;letter-spacing:1px;color:var(--cyan);text-transform:uppercase;}
+  .stat .v{font-family:var(--mono);font-size:17px;font-weight:700;margin-top:3px;}
+  .drop{border:1.5px dashed var(--line-strong);border-radius:9px;padding:22px;text-align:center;color:var(--text-dim);margin:8px 0;cursor:pointer;}
+  .drop:hover,.drop.over{border-color:var(--cyan-dim);color:var(--cyan);}
+  .result{font-family:var(--mono);font-size:11px;white-space:pre-wrap;color:var(--text-dim);margin-top:10px;}
+  .ok{color:var(--green);} .bad{color:var(--danger);}
+  .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#1a1006;border:1px solid var(--amber-dim);color:var(--amber);
+    padding:9px 16px;border-radius:8px;font-family:var(--mono);font-size:12px;z-index:200;opacity:0;transition:opacity .25s;pointer-events:none;max-width:80vw;text-align:center;}
+  .toast.show{opacity:1;}
+  ::-webkit-scrollbar{width:9px;height:9px;} ::-webkit-scrollbar-thumb{background:#2a3040;border-radius:5px;} ::-webkit-scrollbar-track{background:transparent;}
+  @media (max-width:1180px){ .detail{width:300px;min-width:300px;} td.desc{max-width:160px;} }
+  @media (max-width:980px){ .side{display:none;} }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand"><span class="dot"></span>NEUROMPR<small>PACS</small></div>
+    <div class="search"><input type="search" id="q" placeholder="Search patient ID, name, accession, description…   ( / )"></div>
+    <span class="lbl">Study date</span>
+    <input type="date" id="dFrom" title="From"><span class="lbl">to</span><input type="date" id="dTo" title="To">
+    <div class="spacer"></div>
+    <span class="scanInfo" id="scanInfo"></span>
+    <button class="btn" id="importBtn" title="Import NIfTI or DICOM studies">⇪ Import</button>
+    <button class="btn" id="adminBtn" style="display:none;">⚙ Admin</button>
+    <div class="userWrap">
+      <button class="btn" id="userBtn">…</button>
+      <div class="menu" id="userMenu">
+        <div class="who" id="whoLine"></div>
+        <button id="pwBtn">Change password</button>
+        <button id="logoutBtn">Sign out</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="main">
+    <aside class="side" id="side"></aside>
+
+    <section class="list">
+      <div class="listHead">
+        <span class="count" id="count">Loading…</span>
+        <div class="spacer"></div>
+        <span class="lbl">Sort</span>
+        <select id="sortSel">
+          <option value="patient:asc">Patient ID</option>
+          <option value="date:desc">Study date (newest)</option>
+          <option value="imported:desc">Recently added</option>
+          <option value="opened:desc">Recently opened</option>
+          <option value="priority:asc">Priority</option>
+          <option value="status:asc">Reading status</option>
+          <option value="tumor:desc">Tumor volume (largest)</option>
+          <option value="collection:asc">Collection</option>
+        </select>
+        <label class="chk" title="Show a small image per row (generated once, then cached)"><input type="checkbox" id="thumbsChk"> Thumbnails</label>
+        <span class="lbl">Per page</span>
+        <select id="perSel"><option>25</option><option selected>50</option><option>100</option><option>200</option></select>
+      </div>
+      <div class="tableWrap" id="tableWrap">
+        <table>
+          <thead><tr id="thead"></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+        <div class="empty" id="emptyMsg" style="display:none;"></div>
+      </div>
+      <div class="pager" id="pager"></div>
+    </section>
+
+    <aside class="detail" id="detail"><div class="dEmpty">Select a study to see its details.<br>Double-click (or Enter) opens it in the viewer.</div></aside>
+  </div>
+</div>
+
+<!-- IMPORT -->
+<div class="scrim" id="impScrim">
+  <div class="modal">
+    <div class="mHead"><span class="t">Import studies</span><button class="mClose" data-close="impScrim">&times;</button></div>
+    <div class="tabs" data-tabs="imp">
+      <div class="tab on" data-pane="impNifti">NIfTI (BraTS files)</div>
+      <div class="tab" data-pane="impDicom">DICOM files / zip</div>
+      <div class="tab" data-pane="impNet">From the network</div>
+    </div>
+    <div class="mBody">
+      <div class="pane on" id="impNifti">
+        <div class="note">One study per upload: select its series (e.g. <span class="mono">*_flair.nii.gz, *_t1.nii.gz, *_t1ce.nii.gz, *_t2.nii.gz</span>, optional <span class="mono">*_seg.nii.gz</span>). BraTS 2021 and 2023+ names (t1n / t1c / t2w / t2f) are recognised; the patient ID is taken from the file names if left blank. To add a whole BraTS dataset folder without copying it, use Admin → Datasets.</div>
+        <div class="drop" id="niftiDrop">Click or drop .nii / .nii.gz files here<input type="file" id="niftiFiles" multiple accept=".nii,.gz" style="display:none;"></div>
+        <div class="note" id="niftiPicked"></div>
+        <div class="form">
+          <label><span class="lbl">Patient ID (optional)</span><input type="text" id="impPid"></label>
+          <label><span class="lbl">Patient name (optional)</span><input type="text" id="impPname"></label>
+          <label><span class="lbl">Study date</span><input type="date" id="impDate"></label>
+          <label><span class="lbl">Description</span><input type="text" id="impDesc" placeholder="MRI brain"></label>
+        </div>
+        <button class="btn primary" id="niftiGo">Upload and archive</button>
+        <div class="result" id="niftiRes"></div>
+      </div>
+      <div class="pane" id="impDicom">
+        <div class="note">Select DICOM files (a whole folder's contents) or a .zip. Every series is converted for the viewer; the original DICOM files are kept in the archive and are what other DICOM nodes receive.</div>
+        <div class="drop" id="dicomDrop">Click or drop DICOM files / .zip here<input type="file" id="dicomFiles" multiple style="display:none;"></div>
+        <div class="note" id="dicomPicked"></div>
+        <button class="btn primary" id="dicomGo">Import DICOM</button>
+        <div class="result" id="dicomRes"></div>
+      </div>
+      <div class="pane" id="impNet">
+        <div class="note" id="netInfo"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ADMIN -->
+<div class="scrim" id="admScrim">
+  <div class="modal">
+    <div class="mHead"><span class="t">Administration</span><button class="mClose" data-close="admScrim">&times;</button></div>
+    <div class="tabs" data-tabs="adm">
+      <div class="tab on" data-pane="admUsers">Users</div>
+      <div class="tab" data-pane="admData">Datasets</div>
+      <div class="tab" data-pane="admDicom">DICOM</div>
+      <div class="tab" data-pane="admAudit">Audit log</div>
+      <div class="tab" data-pane="admSys">System</div>
+    </div>
+    <div class="mBody">
+      <div class="pane on" id="admUsers">
+        <table class="grid"><thead><tr><th>User</th><th>Name</th><th>Role</th><th>Active</th><th>Last sign-in</th><th></th></tr></thead><tbody id="userRows"></tbody></table>
+        <h4 class="lbl" style="margin-top:18px;">Add user</h4>
+        <div class="form">
+          <label><span class="lbl">Username</span><input type="text" id="nuName" autocomplete="off"></label>
+          <label><span class="lbl">Full name</span><input type="text" id="nuFull"></label>
+          <label><span class="lbl">Role</span><select id="nuRole"><option value="radiologist">Radiologist — read, report, sign</option><option value="viewer">Viewer — read only</option><option value="admin">Admin — everything</option></select></label>
+          <label><span class="lbl">Password (8+)</span><input type="password" id="nuPw" autocomplete="new-password"></label>
+        </div>
+        <button class="btn primary" id="nuGo">Create user</button>
+      </div>
+      <div class="pane" id="admData">
+        <div class="note">Dataset folders are indexed in place: every sub-folder holding BraTS-style series (t1 / t1ce / t2 / flair, 2021 or 2023 naming) becomes a study. Files are never modified or copied. The folder in <span class="mono">app.py → DATASET_ROOTS</span> is always included.</div>
+        <table class="grid"><thead><tr><th>Folder</th><th>Studies</th><th>Status</th><th></th></tr></thead><tbody id="rootRows"></tbody></table>
+        <div class="form" style="grid-template-columns:1fr auto;">
+          <input type="text" id="newRoot" placeholder="C:\Users\you\Documents\BraTS2021_Training_Data">
+          <button class="btn primary" id="addRoot">Add folder &amp; scan</button>
+        </div>
+        <button class="btn" id="rescanBtn">Rescan all folders</button>
+        <div class="result" id="scanRes"></div>
+      </div>
+      <div class="pane" id="admDicom">
+        <div id="dicomStatus" class="note"></div>
+        <h4 class="lbl" style="margin-top:16px;">Remote DICOM nodes (destinations for "Send", and C-MOVE targets)</h4>
+        <table class="grid"><thead><tr><th>Name</th><th>AE title</th><th>Host</th><th>Port</th><th></th></tr></thead><tbody id="nodeRows"></tbody></table>
+        <div class="form">
+          <label><span class="lbl">Name</span><input type="text" id="ndName" placeholder="Radiology workstation"></label>
+          <label><span class="lbl">AE title</span><input type="text" id="ndAe" placeholder="WORKSTATION"></label>
+          <label><span class="lbl">Host / IP</span><input type="text" id="ndHost" placeholder="192.168.1.20"></label>
+          <label><span class="lbl">Port</span><input type="number" id="ndPort" value="104"></label>
+        </div>
+        <button class="btn primary" id="ndGo">Add node</button>
+        <h4 class="lbl" style="margin-top:16px;">Recent arrivals</h4>
+        <div id="dicomRecent" class="result"></div>
+      </div>
+      <div class="pane" id="admAudit">
+        <div class="form" style="grid-template-columns:1fr 1fr auto;">
+          <input type="text" id="audUser" placeholder="user">
+          <input type="text" id="audAction" placeholder="action (e.g. report, export, login)">
+          <button class="btn" id="audGo">Filter</button>
+        </div>
+        <table class="grid"><thead><tr><th>Time</th><th>User</th><th>Action</th><th>Patient</th><th>Detail</th></tr></thead><tbody id="audRows"></tbody></table>
+      </div>
+      <div class="pane" id="admSys">
+        <div class="statGrid" id="sysStats"></div>
+        <div class="note" style="margin-top:14px;" id="sysNote"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PASSWORD -->
+<div class="scrim" id="pwScrim">
+  <div class="modal small">
+    <div class="mHead"><span class="t">Change password</span><button class="mClose" data-close="pwScrim">&times;</button></div>
+    <div class="mBody">
+      <div class="form" style="grid-template-columns:1fr;">
+        <label><span class="lbl">Current password</span><input type="password" id="pwOld" autocomplete="current-password"></label>
+        <label><span class="lbl">New password (8+)</span><input type="password" id="pwNew" autocomplete="new-password"></label>
+      </div>
+      <button class="btn primary" id="pwGo">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+"use strict";
+const $ = id => document.getElementById(id);
+const S = { me:null, q:"", dFrom:"", dTo:"", f:{view:"all", status:"", priority:"", collection:"", has_seg:""},
+            sort:"patient", dir:"asc", page:1, per:50, rows:[], total:0, sel:null, thumbs:false, facets:null,
+            detail:null, names:[], nodes:[], scanRunning:false, refreshTimer:0 };
+const STATUS = [["unread","Unread"],["opened","Viewed"],["draft","Draft"],["preliminary","Preliminary"],["final","Final"]];
+const STATUS_LABEL = Object.fromEntries(STATUS);
+const PRIOS = [["stat","STAT"],["urgent","Urgent"],["routine","Routine"]];
+
+function esc(s){ return String(s ?? "").replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function fmtDate(d){ d = String(d||"").replace(/-/g,""); return d.length===8 ? `${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6)}` : ""; }
+function ago(ts){
+  if (!ts) return "—";
+  const s = Date.now()/1000 - ts;
+  if (s < 60) return "just now";
+  if (s < 3600) return Math.floor(s/60) + " min ago";
+  if (s < 86400) return Math.floor(s/3600) + " h ago";
+  if (s < 86400*30) return Math.floor(s/86400) + " d ago";
+  return new Date(ts*1000).toLocaleDateString();
+}
+function fmtBytes(b){ if (!b) return "0"; const u=["B","KB","MB","GB","TB"]; let i=0; while (b>=1024 && i<4){ b/=1024; i++; } return `${b.toFixed(b<10&&i?1:0)} ${u[i]}`; }
+function toast(msg, ms=3200){ const t=$("toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove("show"), ms); }
+const canEdit = ()=> S.me && S.me.role !== "viewer";
+const isAdmin = ()=> S.me && S.me.role === "admin";
+
+async function api(url, opts={}){
+  if (opts.json !== undefined){ opts.method = opts.method || "POST"; opts.headers = {"Content-Type":"application/json"}; opts.body = JSON.stringify(opts.json); }
+  const r = await fetch(url, opts);
+  if (r.status === 401){ location.href = "/login?next=" + encodeURIComponent(location.pathname + location.search); throw new Error("signed out"); }
+  let j = null;
+  try{ j = await r.json(); }catch(e){ throw new Error(`HTTP ${r.status}`); }
+  if (!r.ok) throw new Error(j && j.error ? j.error : `HTTP ${r.status}`);
+  return j;
+}
+
+/* ------------------------------ worklist ------------------------------ */
+const COLS = [
+  {k:"flag", t:"", w:28},
+  {k:"priority", t:"Pri", sort:"priority"},
+  {k:"status", t:"Status", sort:"status"},
+  {k:"thumb", t:"", thumbs:true},
+  {k:"patient", t:"Patient ID", sort:"patient"},
+  {k:"name", t:"Name"},
+  {k:"date", t:"Study date", sort:"date"},
+  {k:"collection", t:"Collection / description", sort:"collection"},
+  {k:"series", t:"Series"},
+  {k:"tumor", t:"Tumor mL", sort:"tumor"},
+  {k:"report", t:"Report"},
+  {k:"assigned", t:"Assigned"},
+  {k:"opened", t:"Opened", sort:"opened"},
+];
+function renderHead(){
+  $("thead").innerHTML = COLS.filter(c=> !c.thumbs || S.thumbs).map(c=>{
+    const act = c.sort && S.sort === c.sort;
+    return `<th class="${c.sort ? "sort" : ""} ${act ? "active" : ""}" data-sort="${c.sort||""}"${c.w?` style="width:${c.w}px"`:""}>${esc(c.t)}${act ? (S.dir==="asc"?" ▲":" ▼") : ""}</th>`;
+  }).join("");
+  $("thead").querySelectorAll("th.sort").forEach(th=> th.onclick = ()=>{
+    const k = th.dataset.sort;
+    if (S.sort === k) S.dir = S.dir === "asc" ? "desc" : "asc";
+    else { S.sort = k; S.dir = (k === "patient" || k === "collection" || k === "priority" || k === "status") ? "asc" : "desc"; }
+    S.page = 1; load(); savePrefs();
+  });
+}
+function params(){
+  const p = new URLSearchParams({sort:S.sort, dir:S.dir, page:S.page, per_page:S.per});
+  if (S.q) p.set("q", S.q);
+  if (S.dFrom) p.set("date_from", S.dFrom);
+  if (S.dTo) p.set("date_to", S.dTo);
+  if (S.f.view === "mine") p.set("mine", "1");
+  if (S.f.view === "flagged") p.set("flagged", "1");
+  for (const k of ["status","priority","collection","has_seg"]) if (S.f[k] !== "") p.set(k, S.f[k]);
+  return p;
+}
+async function load(quiet){
+  let j;
+  try{ j = await api("/api/studies?" + params().toString()); }catch(e){ if (!quiet) toast("Worklist: " + e.message); return; }
+  S.rows = j.rows; S.total = j.total; S.facets = j.facets;
+  S.scanRunning = j.scan.running;
+  $("scanInfo").textContent = j.scan.running ? `Indexing datasets… ${j.scan.done}/${j.scan.total || "?"}` : "";
+  renderHead(); renderRows(); renderPager(); renderSide();
+  const sv = `${S.sort}:${S.dir}`, ss = $("sortSel");
+  if ([...ss.options].some(o=> o.value === sv)) ss.value = sv;
+  if (S.sel && !S.rows.some(r=> r.pk === S.sel) && !quiet){ /* keep detail open even when filtered out */ }
+  scheduleRefresh();
+}
+function scheduleRefresh(){
+  clearTimeout(S.refreshTimer);
+  S.refreshTimer = setTimeout(()=>{ if (!document.hidden && !document.querySelector(".scrim.show")) load(true); else scheduleRefresh(); },
+                              S.scanRunning ? 2000 : 20000);
+}
+function seriesChips(keys){
+  return (keys||"").split(",").filter(Boolean).map(k=>`<span class="ser ${k==="seg"?"seg":""}">${esc(k.toUpperCase())}</span>`).join("");
+}
+function renderRows(){
+  const tb = $("rows");
+  if (!S.rows.length){
+    tb.innerHTML = "";
+    $("emptyMsg").style.display = "block";
+    $("emptyMsg").innerHTML = S.facets && S.facets.all === 0
+      ? (S.scanRunning ? "Indexing your dataset folders…" : `The archive is empty.<br>Add your BraTS dataset folder in <b>Admin → Datasets</b> (or set <span class="mono">DATASET_ROOTS</span> in app.py), or use <b>Import</b>.`)
+      : "No studies match these filters.";
+    return;
+  }
+  $("emptyMsg").style.display = "none";
+  tb.innerHTML = S.rows.map(r=>{
+    const cells = {
+      flag: `<span class="star ${r.flagged?"on":""}" data-flag="${r.pk}" title="Flag">${r.flagged?"★":"☆"}</span>`,
+      priority: r.priority !== "routine" ? `<span class="chip ${esc(r.priority)}">${esc(r.priority)}</span>` : `<span class="dim">—</span>`,
+      status: `<span class="chip ${esc(r.status)}">${esc(STATUS_LABEL[r.status] || r.status)}</span>`,
+      thumb: `<img class="th" loading="lazy" src="/api/studies/${r.pk}/thumb" alt="">`,
+      patient: esc(r.patient_id) + (r.priors ? ` <span class="ser" title="${r.priors} other stud${r.priors>1?"ies":"y"} for this patient">+${r.priors}</span>` : ""),
+      name: r.patient_name ? esc(r.patient_name) : `<span class="dim">—</span>`,
+      date: fmtDate(r.study_date) || (r.timepoint ? `<span class="dim">tp ${esc(r.timepoint)}</span>` : `<span class="dim">—</span>`),
+      collection: `<span title="${esc(r.description)}">${esc(r.collection)}</span>`,
+      series: seriesChips(r.series_keys),
+      tumor: r.tumor_ml != null ? Number(r.tumor_ml).toFixed(1) : `<span class="dim">—</span>`,
+      report: r.report_status ? `<span class="chip ${esc(r.report_status)}">${esc(r.report_status)}</span>` : `<span class="dim">—</span>`,
+      assigned: r.assigned_to ? esc(r.assigned_to) : `<span class="dim">—</span>`,
+      opened: r.last_opened ? `<span title="${esc(r.opened_by)}">${ago(r.last_opened)}</span>` : `<span class="dim">never</span>`,
+    };
+    const cls = {patient:"pid", tumor:"num", collection:"desc", opened:"dim"};
+    return `<tr data-pk="${r.pk}" class="${r.pk===S.sel?"sel":""} ${r.missing?"missing":""}" title="${r.missing?"Study folder missing on disk":""}">`
+      + COLS.filter(c=> !c.thumbs || S.thumbs).map(c=>`<td class="${cls[c.k]||""}">${cells[c.k]}</td>`).join("") + `</tr>`;
+  }).join("");
+  tb.querySelectorAll("tr").forEach(tr=>{
+    tr.onclick = e=>{
+      const pk = Number(tr.dataset.pk);
+      if (e.target.dataset.flag){ toggleFlag(pk); return; }
+      select(pk);
+    };
+    tr.ondblclick = ()=> openViewer(Number(tr.dataset.pk));
+  });
+}
+function renderPager(){
+  const pages = Math.max(1, Math.ceil(S.total / S.per));
+  const from = S.total ? (S.page-1)*S.per + 1 : 0, to = Math.min(S.total, S.page*S.per);
+  $("count").innerHTML = `<b>${S.total}</b> stud${S.total===1?"y":"ies"}${S.total ? ` · showing ${from}–${to}` : ""}`;
+  $("pager").innerHTML = `<button class="btn" id="pgPrev" ${S.page<=1?"disabled":""}>‹ Prev</button>`
+    + `<span>Page ${S.page} / ${pages}</span>`
+    + `<button class="btn" id="pgNext" ${S.page>=pages?"disabled":""}>Next ›</button>`
+    + `<div class="spacer"></div><span>↑ ↓ select · Enter opens · / search</span>`;
+  $("pgPrev").onclick = ()=>{ if (S.page>1){ S.page--; load(); } };
+  $("pgNext").onclick = ()=>{ if (S.page<pages){ S.page++; load(); } };
+}
+function renderSide(){
+  const F = S.facets || {status:{}, priority:{}, collection:{}};
+  const item = (group, val, label, n)=>{
+    const on = group === "view" ? S.f.view === val : S.f[group] === val;
+    return `<div class="fitem ${on?"on":""}" data-g="${group}" data-v="${esc(val)}"><span class="nm">${esc(label)}</span><span class="n">${n ?? ""}</span></div>`;
+  };
+  let h = `<h4>Worklist</h4>` + item("view","all","All studies",F.all) + item("view","mine","Assigned to me",F.mine) + item("view","flagged","Flagged",F.flagged);
+  h += `<h4>Reading status</h4>` + STATUS.map(([k,l])=> item("status",k,l,F.status[k]||0)).join("");
+  h += `<h4>Priority</h4>` + PRIOS.map(([k,l])=> item("priority",k,l,F.priority[k]||0)).join("");
+  const cols = Object.entries(F.collection||{}).sort((a,b)=> b[1]-a[1]);
+  h += `<h4>Collection</h4>` + cols.map(([k,n])=> item("collection",k,k||"(none)",n)).join("");
+  h += `<h4>Segmentation</h4>` + item("has_seg","1","With segmentation","") + item("has_seg","0","Without","");
+  $("side").innerHTML = h;
+  $("side").querySelectorAll(".fitem").forEach(el=> el.onclick = ()=>{
+    const g = el.dataset.g, v = el.dataset.v;
+    if (g === "view"){ S.f.view = v; if (v === "all"){ S.f.status = S.f.priority = S.f.collection = S.f.has_seg = ""; } }
+    else S.f[g] = S.f[g] === v ? "" : v;
+    S.page = 1; load();
+  });
+}
+async function toggleFlag(pk){
+  if (!canEdit()){ toast("Read-only role."); return; }
+  const r = S.rows.find(x=> x.pk === pk);
+  try{ await api(`/api/studies/${pk}`, {method:"PATCH", json:{flagged: !r.flagged}}); r.flagged = r.flagged ? 0 : 1; renderRows(); }
+  catch(e){ toast(e.message); }
+}
+function openViewer(pk){
+  try{ sessionStorage.setItem("neurompr.worklist", JSON.stringify({ids: S.rows.map(r=> r.pk), at: Date.now()})); }catch(e){}
+  location.href = `/viewer?study=${pk}`;
+}
+
+/* ------------------------------ detail panel ------------------------------ */
+async function select(pk){
+  S.sel = pk;
+  document.querySelectorAll("#rows tr").forEach(tr=> tr.classList.toggle("sel", Number(tr.dataset.pk) === pk));
+  let d;
+  try{ d = await api(`/api/studies/${pk}`); }catch(e){ toast(e.message); return; }
+  if (S.sel !== pk) return;
+  S.detail = d;
+  renderDetail(d);
+}
+function renderDetail(d){
+  const ed = canEdit();
+  const opt = (v, cur, label)=> `<option value="${esc(v)}" ${v===cur?"selected":""}>${esc(label)}</option>`;
+  const assignOpts = opt("", d.assigned_to, "— unassigned —") + S.names.map(n=> opt(n.username, d.assigned_to, n.full_name ? `${n.full_name} (${n.username})` : n.username)).join("");
+  const nodeOpts = S.nodes.map(n=> `<option value="${n.id}">${esc(n.name)} — ${esc(n.ae_title)}@${esc(n.host)}:${n.port}</option>`).join("");
+  let h = `<div class="dHead"><img src="/api/studies/${d.pk}/thumb" alt="">
+      <div style="min-width:0;"><div class="pid">${esc(d.patient_id)}</div>
+      <div class="nm">${d.patient_name ? esc(d.patient_name) : "anonymised"}${d.sex ? " · " + esc(d.sex) : ""}${d.birth_date ? " · " + fmtDate(d.birth_date) : ""}</div>
+      <div><span class="chip ${esc(d.status)}">${esc(STATUS_LABEL[d.status]||d.status)}</span> ${d.priority!=="routine"?`<span class="chip ${esc(d.priority)}">${esc(d.priority)}</span>`:""}</div>
+      <div style="margin-top:8px;">${seriesChips(d.series.map(s=>s.key).join(","))}</div>
+      ${d.tumor_ml != null ? `<div class="mono" style="margin-top:7px;color:var(--text-dim);">tumor ${Number(d.tumor_ml).toFixed(1)} mL · ${esc(d.seg_source==="ground_truth"?"dataset GT":d.seg_source||"")}</div>` : ""}
+      </div></div>`;
+  h += `<div class="dActions">
+      <button class="btn primary" id="dOpen" ${d.missing?"disabled":""}>Open in viewer</button>
+      <div class="ddWrap"><button class="btn" id="dExport" ${!ed?"disabled":""}>Export ▾</button>
+        <div class="menu" id="dExportMenu" style="left:0;right:auto;">
+          <button data-exp="nifti">NIfTI zip (original files)</button>
+          <button data-exp="dicom">DICOM zip</button>
+          <button data-exp="dicom-anon">DICOM zip, anonymised</button>
+          <button data-exp="nifti-anon">NIfTI zip, anonymised names</button>
+        </div></div>
+      ${isAdmin() ? `<button class="btn danger" id="dDelete" title="${d.source==="dataset"?"Hide from the worklist (dataset files are never deleted)":"Delete this study and its archived files"}">${d.source==="dataset"?"Hide":"Delete"}</button>` : ""}
+    </div>`;
+  if (d.missing) h += `<div class="dSec"><div class="note bad">The study folder is missing on disk:<br><span class="mono">${esc(d.folder)}</span></div></div>`;
+  h += `<div class="dSec"><h5>Workflow</h5><div class="kv">
+      <span class="k">Priority</span><span class="v"><select id="dPrio" ${!ed?"disabled":""}>${PRIOS.map(([k,l])=>opt(k,d.priority,l)).join("")}</select></span>
+      <span class="k">Assigned</span><span class="v"><select id="dAssign" ${!ed?"disabled":""}>${assignOpts}</select></span>
+      <span class="k">Status</span><span class="v"><select id="dStatus" ${!ed?"disabled":""}>${STATUS.map(([k,l])=>opt(k,d.status,l)).join("")}</select></span>
+      <span class="k">Flag</span><span class="v"><label class="chk"><input type="checkbox" id="dFlag" ${d.flagged?"checked":""} ${!ed?"disabled":""}> follow-up</label></span>
+    </div></div>`;
+  h += `<div class="dSec"><h5>Patient ${ed?`<button class="btn small" id="dSavePt">Save</button>`:""}</h5><div class="kv">
+      <span class="k">Patient ID</span><span class="v mono">${esc(d.patient_id)}</span>
+      <span class="k">Name</span><span class="v"><input type="text" id="dPname" value="${esc(d.patient_name)}" ${!ed?"readonly":""} placeholder="anonymised"></span>
+      <span class="k">Sex</span><span class="v"><select id="dSex" ${!ed?"disabled":""}>${[["","—"],["F","F"],["M","M"],["O","O"]].map(([k,l])=>opt(k,d.sex||"",l)).join("")}</select></span>
+      <span class="k">Birth date</span><span class="v"><input type="date" id="dDob" value="${fmtDate(d.birth_date)}" ${!ed?"readonly":""}></span>
+    </div></div>`;
+  h += `<div class="dSec"><h5>Study ${ed?`<button class="btn small" id="dSaveSt">Save</button>`:""}</h5><div class="kv">
+      <span class="k">Study date</span><span class="v"><input type="date" id="dDate" value="${fmtDate(d.study_date)}" ${!ed?"readonly":""}></span>
+      <span class="k">Accession</span><span class="v"><input type="text" id="dAcc" value="${esc(d.accession)}" ${!ed?"readonly":""}></span>
+      <span class="k">Description</span><span class="v"><input type="text" id="dDesc" value="${esc(d.description)}" ${!ed?"readonly":""}></span>
+      <span class="k">Collection</span><span class="v">${esc(d.collection)}${d.timepoint?` · timepoint ${esc(d.timepoint)}`:""}</span>
+      <span class="k">Source</span><span class="v">${esc({dataset:"dataset folder (indexed in place)", upload:"NIfTI upload", dicom:"DICOM"}[d.source]||d.source)}</span>
+      <span class="k">Size</span><span class="v">${fmtBytes(d.size_bytes)} · ${d.num_series} series</span>
+      <span class="k">Location</span><span class="v mono" style="font-size:9.5px;">${esc(d.folder)}</span>
+      <span class="k">Study UID</span><span class="v mono" style="font-size:9.5px;">${esc(d.study_uid)}</span>
+    </div></div>`;
+  h += `<div class="dSec"><h5>Series</h5>` + d.series.map(s=>`<div class="row2"><span><span class="ser ${s.key==="seg"?"seg":""}">${esc(s.key.toUpperCase())}</span> ${esc(s.description)}</span><span class="sm">${esc(s.dims)} · ${esc(s.spacing)} mm</span></div>`).join("") + `</div>`;
+  h += `<div class="dSec"><h5>Priors (${d.priors_list.length})</h5>` + (d.priors_list.length ? d.priors_list.map(p=>`<div class="row2 link" data-prior="${p.pk}"><span>${esc(fmtDate(p.study_date) || (p.timepoint?"timepoint "+p.timepoint:"study"))} · ${esc(p.collection)}</span><span class="chip ${esc(p.status)}">${esc(STATUS_LABEL[p.status]||p.status)}</span></div>`).join("") : `<div class="note">No other studies for this patient.</div>`) + `</div>`;
+  h += `<div class="dSec"><h5>Reports</h5>` + (d.reports.length ? d.reports.map(r=>`<div class="row2"><span>v${r.version} · <span class="chip ${esc(r.status)}">${esc(r.status)}</span> ${esc(r.signed_by||r.author)}</span>${r.html_file?`<a href="/reports/${encodeURIComponent(r.html_file)}" target="_blank">open</a>`:`<span class="sm">draft</span>`}</div>`).join("") : `<div class="note">No report yet — write one from the viewer.</div>`) + `</div>`;
+  if (ed && S.nodes.length) h += `<div class="dSec"><h5>Send to DICOM node</h5>
+      <div style="display:flex;gap:6px;align-items:center;"><select id="dNode" style="flex:1;min-width:0;">${nodeOpts}</select><button class="btn" id="dSend">Send</button></div>
+      <label class="chk" style="margin-top:6px;"><input type="checkbox" id="dAnon"> anonymise</label><div class="note" id="dSendRes"></div></div>`;
+  h += `<div class="dSec"><h5>Activity</h5>` + (d.audit.length ? d.audit.slice(0,10).map(a=>`<div class="row2"><span>${esc(a.action.replace(/_/g," "))} <span class="sm">${esc(a.detail||"")}</span></span><span class="sm">${esc(a.username)} · ${ago(a.ts)}</span></div>`).join("") : `<div class="note">No activity yet.</div>`) + `</div>`;
+  $("detail").innerHTML = h;
+
+  $("dOpen").onclick = ()=> openViewer(d.pk);
+  const patch = async (body, msg)=>{ try{ await api(`/api/studies/${d.pk}`, {method:"PATCH", json:body}); toast(msg||"Saved."); load(true); select(d.pk); }catch(e){ toast(e.message); } };
+  if (ed){
+    $("dPrio").onchange = e=> patch({priority:e.target.value}, "Priority updated.");
+    $("dAssign").onchange = e=> patch({assigned_to:e.target.value}, e.target.value ? `Assigned to ${e.target.value}.` : "Unassigned.");
+    $("dStatus").onchange = e=> patch({status:e.target.value}, "Status updated.");
+    $("dFlag").onchange = e=> patch({flagged:e.target.checked});
+    $("dSaveSt").onclick = ()=> patch({study_date:$("dDate").value, accession:$("dAcc").value, description:$("dDesc").value}, "Study details saved.");
+    $("dSavePt").onclick = async ()=>{
+      try{ await api(`/api/patients/${d.patient_pk}`, {method:"PATCH", json:{name:$("dPname").value, sex:$("dSex").value, birth_date:$("dDob").value}}); toast("Patient details saved."); load(true); select(d.pk); }
+      catch(e){ toast(e.message); }
+    };
+    const ex = $("dExport"), menu = $("dExportMenu");
+    ex.onclick = e=>{ e.stopPropagation(); menu.classList.toggle("show"); };
+    menu.querySelectorAll("[data-exp]").forEach(b=> b.onclick = ()=>{
+      menu.classList.remove("show");
+      const [fmt, anon] = b.dataset.exp.split("-");
+      toast(fmt === "dicom" ? "Building the DICOM zip… the download starts when it's ready." : "Preparing download…", 5000);
+      location.href = `/api/studies/${d.pk}/export?format=${fmt}${anon?"&anon=1":""}`;
+    });
+    if ($("dSend")) $("dSend").onclick = ()=> sendStudy(d.pk);
+  }
+  if ($("dDelete")) $("dDelete").onclick = async ()=>{
+    const what = d.source === "dataset" ? "Hide this study from the worklist? (its dataset files stay untouched)" : "Delete this study and its archived files? Reports for it are deleted too.";
+    if (!confirm(what)) return;
+    try{ await api(`/api/studies/${d.pk}`, {method:"DELETE"}); toast(d.source==="dataset"?"Hidden.":"Deleted."); S.sel=null; $("detail").innerHTML = `<div class="dEmpty">Select a study.</div>`; load(); }
+    catch(e){ toast(e.message); }
+  };
+  $("detail").querySelectorAll("[data-prior]").forEach(el=> el.onclick = ()=> select(Number(el.dataset.prior)));
+}
+async function sendStudy(pk){
+  const nodeId = Number($("dNode").value), anon = $("dAnon").checked;
+  const out = $("dSendRes");
+  try{
+    const j = await api(`/api/studies/${pk}/send`, {json:{node_id:nodeId, anon}});
+    out.textContent = `Sending ${j.total} images…`;
+    const poll = async ()=>{
+      const s = await api(`/api/jobs/${j.job}`);
+      out.innerHTML = s.state === "running" ? `Sending… ${s.sent}/${s.total}` : `<span class="${s.state==="done"?"ok":"bad"}">${esc(s.message)}</span>`;
+      if (s.state === "running") setTimeout(poll, 700);
+    };
+    poll();
+  }catch(e){ out.innerHTML = `<span class="bad">${esc(e.message)}</span>`; }
+}
+
+/* ------------------------------ import ------------------------------ */
+function wireDrop(dropId, inputId, pickedId){
+  const drop = $(dropId), input = $(inputId);
+  drop.onclick = ()=> input.click();
+  drop.ondragover = e=>{ e.preventDefault(); drop.classList.add("over"); };
+  drop.ondragleave = ()=> drop.classList.remove("over");
+  drop.ondrop = e=>{ e.preventDefault(); drop.classList.remove("over"); input.files = e.dataTransfer.files; input.dispatchEvent(new Event("change")); };
+  input.onchange = ()=>{
+    const fs = Array.from(input.files);
+    $(pickedId).textContent = fs.length ? `${fs.length} file(s), ${fmtBytes(fs.reduce((a,f)=>a+f.size,0))}: ${fs.slice(0,6).map(f=>f.name).join(", ")}${fs.length>6?" …":""}` : "";
+  };
+}
+wireDrop("niftiDrop","niftiFiles","niftiPicked");
+wireDrop("dicomDrop","dicomFiles","dicomPicked");
+$("niftiGo").onclick = async ()=>{
+  const fs = Array.from($("niftiFiles").files);
+  if (!fs.length){ toast("Pick the study's .nii / .nii.gz files first."); return; }
+  const fd = new FormData();
+  fs.forEach(f=> fd.append("files", f, f.name));
+  fd.append("patient_id", $("impPid").value); fd.append("patient_name", $("impPname").value);
+  fd.append("study_date", $("impDate").value); fd.append("description", $("impDesc").value);
+  $("niftiGo").disabled = true; $("niftiRes").textContent = "Uploading…";
+  try{
+    const j = await api("/api/import/nifti", {method:"POST", body:fd});
+    $("niftiRes").innerHTML = `<span class="ok">Archived as study #${j.pk}.</span>${j.rejected && j.rejected.length ? " Ignored: " + esc(j.rejected.join(", ")) : ""}`;
+    load(); select(j.pk);
+  }catch(e){ $("niftiRes").innerHTML = `<span class="bad">${esc(e.message)}</span>`; }
+  finally{ $("niftiGo").disabled = false; }
+};
+$("dicomGo").onclick = async ()=>{
+  const fs = Array.from($("dicomFiles").files);
+  if (!fs.length){ toast("Pick DICOM files or a zip first."); return; }
+  const fd = new FormData();
+  fs.forEach(f=> fd.append("files", f, f.name));
+  $("dicomGo").disabled = true; $("dicomRes").textContent = "Uploading and converting…";
+  try{
+    const j = await api("/api/import/dicom", {method:"POST", body:fd});
+    $("dicomRes").innerHTML = j.studies.map(s=> s.ok ? `<span class="ok">✓ ${esc(s.patient_id)} — ${s.series} series (study #${s.pk})</span>` : `<span class="bad">✗ ${esc(s.study_uid)}: ${esc(s.error)}</span>`).join("\n");
+    load();
+  }catch(e){ $("dicomRes").innerHTML = `<span class="bad">${esc(e.message)}</span>`; }
+  finally{ $("dicomGo").disabled = false; }
+};
+
+/* ------------------------------ admin ------------------------------ */
+async function loadUsers(){
+  const rows = await api("/api/users");
+  $("userRows").innerHTML = rows.map(u=>`<tr data-uid="${u.id}">
+      <td class="mono">${esc(u.username)}</td><td>${esc(u.full_name)}</td>
+      <td><select data-role>${["admin","radiologist","viewer"].map(r=>`<option ${r===u.role?"selected":""}>${r}</option>`).join("")}</select></td>
+      <td><input type="checkbox" data-active ${u.active?"checked":""}></td>
+      <td class="mono" style="font-size:10px;">${u.last_login ? new Date(u.last_login*1000).toLocaleString() : "never"}</td>
+      <td><button class="btn small" data-pw>Reset password</button></td></tr>`).join("");
+  $("userRows").querySelectorAll("tr").forEach(tr=>{
+    const uid = tr.dataset.uid;
+    const upd = async body=>{ try{ await api(`/api/users/${uid}`, {method:"PATCH", json:body}); toast("User updated."); }catch(e){ toast(e.message); loadUsers(); } };
+    tr.querySelector("[data-role]").onchange = e=> upd({role:e.target.value});
+    tr.querySelector("[data-active]").onchange = e=> upd({active:e.target.checked});
+    tr.querySelector("[data-pw]").onclick = ()=>{ const p = prompt("New password for this user (8+ characters):"); if (p) upd({password:p}); };
+  });
+}
+$("nuGo").onclick = async ()=>{
+  try{
+    await api("/api/users", {json:{username:$("nuName").value.trim(), full_name:$("nuFull").value.trim(), role:$("nuRole").value, password:$("nuPw").value}});
+    toast("User created."); $("nuName").value = $("nuFull").value = $("nuPw").value = ""; loadUsers(); loadNames();
+  }catch(e){ toast(e.message); }
+};
+async function loadRoots(){
+  const j = await api("/api/admin/datasets");
+  $("rootRows").innerHTML = j.roots.map(r=>`<tr><td class="mono" style="font-size:10.5px;">${esc(r.path)}</td><td class="mono">${r.studies}</td>
+      <td>${r.exists ? `<span class="ok">found</span>` : `<span class="bad">not found</span>`}${r.configured_in_app_py ? ` <span class="ser">app.py</span>` : ""}</td>
+      <td>${r.removable ? `<button class="btn small danger" data-rm="${esc(r.path)}">Remove</button>` : ""}</td></tr>`).join("")
+    || `<tr><td colspan="4" class="note">No dataset folders yet.</td></tr>`;
+  $("rootRows").querySelectorAll("[data-rm]").forEach(b=> b.onclick = async ()=>{
+    if (!confirm("Stop scanning this folder? Studies already indexed stay in the archive.")) return;
+    await api("/api/admin/datasets", {method:"DELETE", json:{path:b.dataset.rm}}); loadRoots();
+  });
+  const sc = j.scan;
+  $("scanRes").innerHTML = sc.running ? `Scanning… ${sc.done}/${sc.total}` :
+    (sc.finished ? `Last scan: ${sc.total} case folders, ${sc.new} new, ${sc.missing} missing · ${new Date(sc.finished*1000).toLocaleString()}` + (sc.errors.length ? `\n<span class="bad">${esc(sc.errors.slice(0,8).join("\n"))}</span>` : "") : "");
+}
+$("addRoot").onclick = async ()=>{
+  try{ await api("/api/admin/datasets", {json:{path:$("newRoot").value}}); toast("Folder added — scanning."); $("newRoot").value=""; loadRoots(); load(); }
+  catch(e){ toast(e.message); }
+};
+$("rescanBtn").onclick = async ()=>{ try{ await api("/api/admin/scan", {method:"POST"}); toast("Scanning dataset folders…"); loadRoots(); load(); }catch(e){ toast(e.message); } };
+async function loadDicom(){
+  const j = await api("/api/dicom/status");
+  S.nodes = j.nodes;
+  const host = location.hostname;
+  $("dicomStatus").innerHTML = !j.pynetdicom ? `<span class="bad">DICOM networking is off: install it with <span class="mono">pip install pynetdicom pydicom</span> and restart.</span>`
+    : (j.running ? `<span class="ok">● Listening</span> as AE <b class="mono">${esc(j.ae_title)}</b> on port <b class="mono">${j.port}</b>. Configure your scanner or workstation to send to AE <span class="mono">${esc(j.ae_title)}</span>, host <span class="mono">${esc(host)}</span>${host==="127.0.0.1"||host==="localhost"?" (this PC's network IP for other machines)":""}, port <span class="mono">${j.port}</span>. It answers C-ECHO, C-STORE, C-FIND, C-GET and C-MOVE.<br>Received ${j.stats.received||0} images · ${j.stats.associations||0} connections · ${j.stats.find||0} queries · ${(j.stats.get||0)+(j.stats.move||0)} retrieves.`
+       : `<span class="bad">Not listening: ${esc(j.error || "disabled in app.py")}</span>`);
+  $("nodeRows").innerHTML = j.nodes.map(n=>`<tr><td>${esc(n.name)}</td><td class="mono">${esc(n.ae_title)}</td><td class="mono">${esc(n.host)}</td><td class="mono">${n.port}</td>
+      <td style="white-space:nowrap;"><button class="btn small" data-echo="${n.id}">Echo</button> <button class="btn small danger" data-del="${n.id}">Remove</button> <span data-er="${n.id}" class="mono" style="font-size:10px;"></span></td></tr>`).join("")
+    || `<tr><td colspan="5" class="note">No remote nodes configured.</td></tr>`;
+  $("nodeRows").querySelectorAll("[data-echo]").forEach(b=> b.onclick = async ()=>{
+    const out = $("nodeRows").querySelector(`[data-er="${b.dataset.echo}"]`); out.textContent = "…";
+    try{ const r = await api(`/api/dicom/nodes/${b.dataset.echo}/echo`, {method:"POST"}); out.innerHTML = `<span class="${r.ok?"ok":"bad"}">${esc(r.message)}${r.ms?` · ${r.ms} ms`:""}</span>`; }
+    catch(e){ out.innerHTML = `<span class="bad">${esc(e.message)}</span>`; }
+  });
+  $("nodeRows").querySelectorAll("[data-del]").forEach(b=> b.onclick = async ()=>{ await api(`/api/dicom/nodes/${b.dataset.del}`, {method:"DELETE"}); loadDicom(); });
+  $("dicomRecent").innerHTML = j.recent.length ? j.recent.map(r=>`<span class="${r.ok?"ok":"bad"}">${new Date(r.ts*1000).toLocaleTimeString()} ${esc(r.message)}</span>`).join("\n") : "Nothing received yet.";
+}
+$("ndGo").onclick = async ()=>{
+  try{ await api("/api/dicom/nodes", {json:{name:$("ndName").value, ae_title:$("ndAe").value, host:$("ndHost").value, port:$("ndPort").value}}); toast("Node added."); loadDicom(); }
+  catch(e){ toast(e.message); }
+};
+async function loadAudit(){
+  const p = new URLSearchParams({limit:300});
+  if ($("audUser").value.trim()) p.set("user", $("audUser").value.trim());
+  if ($("audAction").value.trim()) p.set("action", $("audAction").value.trim());
+  const rows = await api("/api/audit?" + p.toString());
+  $("audRows").innerHTML = rows.map(a=>`<tr><td class="mono" style="font-size:10px;">${new Date(a.ts*1000).toLocaleString()}</td><td class="mono">${esc(a.username)}</td>
+      <td>${esc(a.action.replace(/_/g," "))}</td><td class="mono">${esc(a.patient_id||"")}</td><td style="font-size:11px;color:var(--text-dim);">${esc(a.detail)}</td></tr>`).join("")
+    || `<tr><td colspan="5" class="note">No entries.</td></tr>`;
+}
+$("audGo").onclick = loadAudit;
+async function loadSys(){
+  const j = await api("/api/stats?disk=1");
+  const card = (t,v)=>`<div class="stat"><div class="t">${t}</div><div class="v">${v}</div></div>`;
+  $("sysStats").innerHTML = card("Patients", j.patients) + card("Studies", j.studies) + card("Series", j.series) + card("Reports", j.reports)
+    + card("Dataset (in place)", fmtBytes(j.dataset_bytes)) + card("Archive copies", fmtBytes((j.archive_bytes||0)+(j.dicom_store_bytes||0)))
+    + card("Caches", fmtBytes(j.cache_bytes)) + card("Studies in RAM", `${j.loaded_cases.length} / ${j.case_cache_max}`);
+  $("sysNote").innerHTML = `Status: ${Object.entries(j.by_status).map(([k,v])=>`${esc(STATUS_LABEL[k]||k)} ${v}`).join(" · ")}<br>Sources: ${Object.entries(j.by_source).map(([k,v])=>`${esc(k)} ${v}`).join(" · ")}<br>Studies in RAM: ${esc(j.loaded_cases.join(", ") || "none")} (the least recently used is released when more are opened, so memory stays bounded).`;
+}
+
+/* ------------------------------ modals / tabs ------------------------------ */
+document.querySelectorAll("[data-tabs]").forEach(tabs=>{
+  tabs.querySelectorAll(".tab").forEach(t=> t.onclick = ()=>{
+    tabs.querySelectorAll(".tab").forEach(x=> x.classList.toggle("on", x === t));
+    const body = tabs.nextElementSibling;
+    body.querySelectorAll(".pane").forEach(p=> p.classList.toggle("on", p.id === t.dataset.pane));
+    const loaders = {admUsers:loadUsers, admData:loadRoots, admDicom:loadDicom, admAudit:loadAudit, admSys:loadSys};
+    if (loaders[t.dataset.pane]) loaders[t.dataset.pane]().catch(e=> toast(e.message));
+  });
+});
+document.querySelectorAll("[data-close]").forEach(b=> b.onclick = ()=> $(b.dataset.close).classList.remove("show"));
+document.querySelectorAll(".scrim").forEach(s=> s.addEventListener("mousedown", e=>{ if (e.target === s) s.classList.remove("show"); }));
+$("importBtn").onclick = async ()=>{
+  if (!canEdit()){ toast("Your role is read-only."); return; }
+  $("impScrim").classList.add("show");
+  try{
+    const j = await api("/api/dicom/status");
+    $("netInfo").innerHTML = j.running ? `Other DICOM devices can push studies straight into this PACS: AE title <b class="mono">${esc(j.ae_title)}</b>, port <b class="mono">${j.port}</b>, host = this PC's IP address. Received studies appear in the worklist within a few seconds.`
+      : `DICOM networking is not running${j.error ? ": " + esc(j.error) : ""}.`;
+  }catch(e){}
+};
+$("adminBtn").onclick = ()=>{ $("admScrim").classList.add("show"); loadUsers().catch(e=> toast(e.message)); };
+$("userBtn").onclick = e=>{ e.stopPropagation(); $("userMenu").classList.toggle("show"); };
+document.addEventListener("click", ()=> document.querySelectorAll(".menu.show").forEach(m=> m.classList.remove("show")));
+$("logoutBtn").onclick = async ()=>{ await fetch("/api/logout", {method:"POST"}); location.href = "/login"; };
+$("pwBtn").onclick = ()=> $("pwScrim").classList.add("show");
+$("pwGo").onclick = async ()=>{
+  try{ await api("/api/me/password", {json:{old_password:$("pwOld").value, new_password:$("pwNew").value}}); toast("Password changed."); $("pwScrim").classList.remove("show"); $("pwOld").value = $("pwNew").value = ""; }
+  catch(e){ toast(e.message); }
+};
+
+/* ------------------------------ search, keys, boot ------------------------------ */
+let qTimer = 0;
+$("q").addEventListener("input", e=>{ clearTimeout(qTimer); qTimer = setTimeout(()=>{ S.q = e.target.value.trim(); S.page = 1; load(); savePrefs(); }, 250); });
+$("dFrom").onchange = e=>{ S.dFrom = e.target.value; S.page = 1; load(); };
+$("dTo").onchange = e=>{ S.dTo = e.target.value; S.page = 1; load(); };
+$("perSel").onchange = e=>{ S.per = Number(e.target.value); S.page = 1; load(); savePrefs(); };
+$("sortSel").onchange = e=>{ const [k, d] = e.target.value.split(":"); S.sort = k; S.dir = d; S.page = 1; load(); savePrefs(); };
+$("thumbsChk").onchange = e=>{ S.thumbs = e.target.checked; renderHead(); renderRows(); savePrefs(); };
+function savePrefs(){ try{ localStorage.setItem("neurompr.worklist.prefs", JSON.stringify({per:S.per, thumbs:S.thumbs, sort:S.sort, dir:S.dir})); }catch(e){} }
+document.addEventListener("keydown", e=>{
+  if (document.querySelector(".scrim.show")) { if (e.key === "Escape") document.querySelectorAll(".scrim.show").forEach(s=> s.classList.remove("show")); return; }
+  if (["INPUT","TEXTAREA","SELECT"].includes(e.target.tagName)){ if (e.key === "Escape") e.target.blur(); return; }
+  if (e.key === "/"){ e.preventDefault(); $("q").focus(); return; }
+  if (!S.rows.length) return;
+  const i = S.rows.findIndex(r=> r.pk === S.sel);
+  if (e.key === "ArrowDown" || e.key === "ArrowUp"){
+    e.preventDefault();
+    const k = Math.max(0, Math.min(S.rows.length-1, (i < 0 ? -1 : i) + (e.key === "ArrowDown" ? 1 : -1)));
+    select(S.rows[k].pk);
+    const tr = document.querySelector(`#rows tr[data-pk="${S.rows[k].pk}"]`); if (tr) tr.scrollIntoView({block:"nearest"});
+  }
+  if (e.key === "Enter" && S.sel) openViewer(S.sel);
+});
+async function loadNames(){ try{ S.names = await api("/api/users/names"); }catch(e){ S.names = []; } }
+async function boot(){
+  try{
+    const me = await api("/api/me");
+    if (!me.user){ location.href = "/login"; return; }
+    S.me = me.user;
+    $("userBtn").textContent = `${S.me.full_name || S.me.username} · ${S.me.role} ▾`;
+    $("whoLine").innerHTML = `Signed in as <b>${esc(S.me.username)}</b> (${esc(S.me.role)})`;
+    if (!me.require_login){ $("pwBtn").style.display = "none"; $("logoutBtn").style.display = "none"; }
+    $("adminBtn").style.display = isAdmin() ? "inline-flex" : "none";
+    $("importBtn").style.display = canEdit() ? "inline-flex" : "none";
+  }catch(e){ return; }
+  try{
+    const p = JSON.parse(localStorage.getItem("neurompr.worklist.prefs") || "{}");
+    if (p.per) { S.per = p.per; $("perSel").value = String(p.per); }
+    if (p.thumbs) { S.thumbs = true; $("thumbsChk").checked = true; }
+    if (p.sort) { S.sort = p.sort; S.dir = p.dir || "desc"; }
+  }catch(e){}
+  await Promise.all([loadNames(), api("/api/dicom/status").then(j=> S.nodes = j.nodes).catch(()=>{})]);
+  await load();
+  const back = Number(new URLSearchParams(location.search).get("study"));
+  if (back) select(back);
+}
+boot();
+})();
+</script>
+</body>
+</html>

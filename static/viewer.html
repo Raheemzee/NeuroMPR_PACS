@@ -1,0 +1,2399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NeuroMPR PACS — Viewer</title>
+<style>
+  :root{
+    --bg-void:#08090c; --bg-panel:#101319; --bg-panel-2:#161a22;
+    --line:#23283233; --line-strong:#2a3040;
+    --text:#cdd5e0; --text-dim:#6b7282; --text-faint:#454c5c;
+    --amber:#ffb000; --amber-dim:#8a6000; --cyan:#39d8ff; --cyan-dim:#1c6e80; --danger:#ff5d5d; --green:#6bcb77;
+    --mono:'Roboto Mono','SFMono-Regular',Consolas,monospace;
+    --sans:'Inter',-apple-system,'Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;background:var(--bg-void);color:var(--text);font-family:var(--sans);overflow:hidden;}
+  button{font-family:var(--sans);}
+  .app{display:flex;flex-direction:column;height:100vh;width:100vw;}
+
+  .topbar{display:flex;flex-direction:column;border-bottom:1px solid var(--line-strong);background:linear-gradient(180deg,#12151c,#0d0f14);}
+  .row{display:flex;align-items:center;gap:8px;height:40px;min-height:40px;padding:0 10px;overflow-x:auto;}
+  .row + .row{border-top:1px solid #ffffff08;}
+  .brand{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:13px;letter-spacing:2px;color:var(--amber);font-weight:700;white-space:nowrap;}
+  .brand .dot{width:7px;height:7px;border-radius:50%;background:var(--amber);box-shadow:0 0 8px var(--amber);}
+  .brand small{color:var(--text-faint);font-weight:400;letter-spacing:1px;}
+  .sep{width:1px;height:20px;background:var(--line-strong);flex:none;}
+  .label{font-family:var(--mono);font-size:9px;letter-spacing:1.5px;color:var(--text-faint);white-space:nowrap;}
+  input[type=text], input[type=number], select{
+    background:var(--bg-panel-2);border:1px solid var(--line-strong);color:var(--text);border-radius:5px;
+    padding:5px 8px;font-size:11.5px;font-family:var(--mono);
+  }
+  input[type=text]{min-width:260px;}
+  .btn{display:flex;align-items:center;gap:6px;background:var(--bg-panel-2);border:1px solid var(--line-strong);color:var(--text);
+    padding:6px 10px;border-radius:6px;cursor:pointer;font-size:11.5px;font-weight:600;white-space:nowrap;flex:none;}
+  .btn:hover{border-color:var(--cyan-dim);color:var(--cyan);}
+  .btn.primary{background:#062a26;border-color:var(--cyan-dim);color:var(--cyan);}
+  .btn.amber{background:#2a1f06;border-color:var(--amber-dim);color:var(--amber);}
+  .btn:disabled{opacity:.4;cursor:not-allowed;}
+  .tbtn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;width:38px;height:32px;
+    border-radius:6px;border:1px solid transparent;background:transparent;color:var(--text-dim);cursor:pointer;
+    font-size:8px;letter-spacing:.3px;flex:none;}
+  .tbtn:hover{background:var(--bg-panel-2);color:var(--text);}
+  .tbtn.active{background:#2a1f06;border-color:var(--amber-dim);color:var(--amber);}
+  .tbtn.toggle.on{background:#062a26;border-color:var(--cyan-dim);color:var(--cyan);}
+  .toolgroup{display:flex;gap:3px;flex:none;}
+  .spacer{flex:1;min-width:6px;}
+  .range{accent-color:var(--amber);}
+  .segLabel{font-family:var(--mono);font-size:10px;color:var(--text-faint);}
+
+  .body{flex:1;display:flex;min-height:0;}
+  .grid{flex:1;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:2px;background:#000;min-width:0;}
+  .vpanel{position:relative;overflow:hidden;background:radial-gradient(circle at 50% 50%,#060708 0,#000 70%);
+    border:1px solid #0c0e12;}
+  .vpanel.active{border-color:var(--amber-dim);box-shadow:inset 0 0 0 1px var(--amber-dim);}
+  .stage{position:absolute;top:50%;left:50%;transform-origin:0 0;cursor:crosshair;}
+  .stage img, .stage canvas{position:absolute;top:0;left:0;display:block;image-rendering:pixelated;}
+  .vpTag{position:absolute;top:6px;left:8px;font-family:var(--mono);font-size:9.5px;color:var(--amber);
+    background:#0007;padding:1px 6px;border-radius:3px;letter-spacing:1px;pointer-events:none;z-index:5;}
+  .vpMetaTR{position:absolute;top:6px;right:8px;font-family:var(--mono);font-size:9px;color:#9fe870;
+    background:#0007;padding:1px 6px;border-radius:3px;pointer-events:none;z-index:5;}
+  .cineBar{position:absolute;left:0;right:0;bottom:0;height:26px;background:#0009;display:flex;
+    align-items:center;gap:7px;padding:0 8px;z-index:6;}
+  .cineBar button{background:none;border:1px solid var(--line-strong);color:var(--text-dim);width:20px;height:18px;
+    border-radius:3px;cursor:pointer;font-size:9px;line-height:1;padding:0;flex:none;}
+  .cineBar button:hover{color:var(--amber);border-color:var(--amber-dim);}
+  .cineBar input[type=range]{flex:1;accent-color:var(--amber);height:14px;}
+  .cineBar .cnt{font-family:var(--mono);font-size:9px;color:#9fe870;flex:none;white-space:nowrap;min-width:52px;text-align:right;}
+  .vpEmpty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--text-faint);
+    font-size:12px;text-align:center;padding:20px;}
+  .nvWrap{position:absolute;left:0;right:0;top:0;bottom:28px;}
+  #niivueCanvas{position:absolute;inset:0;width:100%;height:100%;display:block;background:#08090c;}
+  .fsBtn{position:absolute;top:6px;right:8px;z-index:6;background:#0007;border:1px solid var(--line-strong);
+    color:var(--text-dim);padding:4px 9px;border-radius:5px;cursor:pointer;font-family:var(--mono);font-size:9.5px;
+    letter-spacing:.5px;}
+  .fsBtn:hover{color:var(--amber);border-color:var(--amber-dim);}
+  .vpanel:fullscreen{background:#000;}
+  .vpanel:-webkit-full-screen{background:#000;}
+
+  /* ---- 3D panel: bottom view bar + tools drawer (both live inside #vp-3d so they stay usable in fullscreen) ---- */
+  .vpBtns{position:absolute;top:6px;right:8px;z-index:8;display:flex;gap:6px;}
+  .vpBtns .fsBtn{position:static;}
+  .toolsBtn.on{color:var(--cyan);border-color:var(--cyan-dim);background:#062a26cc;}
+  .meta3d{position:absolute;top:7px;left:50%;transform:translateX(-50%);font-family:var(--mono);font-size:9px;color:#9fe870;
+    background:#0007;padding:1px 7px;border-radius:3px;pointer-events:none;z-index:5;white-space:nowrap;}
+  .bar3d{position:absolute;left:0;right:0;bottom:0;height:28px;background:#000a;display:flex;align-items:center;gap:5px;
+    padding:0 8px;z-index:6;overflow-x:auto;}
+  .bar3d .b{background:none;border:1px solid var(--line-strong);color:var(--text-dim);height:19px;min-width:21px;padding:0 5px;
+    border-radius:3px;cursor:pointer;font-family:var(--mono);font-size:9px;line-height:1;flex:none;}
+  .bar3d .b:hover{color:var(--amber);border-color:var(--amber-dim);}
+  .bar3d .b.on{color:var(--cyan);border-color:var(--cyan-dim);background:#062a26;}
+  .bar3d input[type=range]{width:64px;accent-color:var(--amber);flex:none;}
+  .bar3d .lbl{font-family:var(--mono);font-size:8.5px;color:var(--text-faint);letter-spacing:1px;flex:none;}
+  .bar3d .vsep{width:1px;height:16px;background:var(--line-strong);flex:none;}
+  .drawer3d{position:absolute;top:30px;right:6px;bottom:34px;width:242px;background:rgba(14,17,23,.95);border:1px solid var(--line-strong);
+    border-radius:8px;z-index:7;overflow-y:auto;display:none;padding:2px 10px 10px;box-shadow:0 10px 30px #000a;}
+  .drawer3d.show{display:block;}
+  .d3sec{border-bottom:1px solid var(--line-strong);padding:8px 0 9px;}
+  .d3sec:last-child{border-bottom:none;}
+  .d3title{display:flex;align-items:center;justify-content:space-between;font-family:var(--mono);font-size:9px;letter-spacing:2px;
+    color:var(--amber);text-transform:uppercase;margin-bottom:6px;}
+  .d3row{display:flex;align-items:center;gap:6px;margin:5px 0;font-size:10.5px;}
+  .d3row > label{font-family:var(--mono);font-size:9px;color:var(--text-dim);min-width:52px;flex:none;}
+  .d3row input[type=range]{flex:1;min-width:0;accent-color:var(--amber);}
+  .d3row .val{font-family:var(--mono);font-size:9px;color:#9fe870;min-width:34px;text-align:right;flex:none;}
+  .d3row select{flex:1;min-width:0;padding:3px 5px;font-size:10.5px;}
+  .d3btns{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;}
+  .d3btns .btn{padding:4px 7px;font-size:10px;}
+  .chk{display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--text);cursor:pointer;margin:3px 0;}
+  .chk input{accent-color:var(--cyan);margin:0;}
+  .swatch{width:9px;height:9px;border-radius:2px;display:inline-block;flex:none;}
+  .d3hint{font-size:9.5px;color:var(--text-faint);line-height:1.45;margin-top:5px;}
+  .panoPrev{width:100%;border:1px solid var(--line-strong);border-radius:4px;margin-top:7px;display:none;background:#000;}
+  .d3sec.disabled{opacity:.45;}
+  .d3sec.disabled input, .d3sec.disabled select{pointer-events:none;}
+  .recDot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--danger);margin-right:4px;animation:blink 1s infinite;}
+  @keyframes blink{50%{opacity:.25;}}
+
+  .rightPanel{width:250px;min-width:250px;background:var(--bg-panel);border-left:1px solid var(--line-strong);
+    display:flex;flex-direction:column;overflow:hidden;}
+  .panelHead{font-family:var(--mono);font-size:10px;letter-spacing:2px;color:var(--text-faint);
+    padding:9px 12px 6px;text-transform:uppercase;border-bottom:1px solid var(--line-strong);}
+  .panelBody{flex:1;overflow-y:auto;padding:10px 12px;}
+  .statCard{border:1px solid var(--line-strong);border-radius:7px;padding:8px 10px;margin-bottom:8px;background:var(--bg-panel-2);}
+  .statCard .t{font-family:var(--mono);font-size:9px;letter-spacing:1px;color:var(--cyan);text-transform:uppercase;}
+  .statCard .v{font-family:var(--mono);font-size:13px;color:var(--text);font-weight:700;margin-top:3px;}
+  .statCard .s{font-size:9px;color:var(--text-faint);margin-top:2px;}
+  .measItem{border:1px solid var(--line-strong);border-radius:6px;padding:6px 8px;margin-bottom:6px;background:var(--bg-panel-2);font-size:10.5px;}
+  .measItem .r1{display:flex;justify-content:space-between;align-items:center;}
+  .measItem .tag{font-family:var(--mono);font-size:9px;color:var(--cyan);text-transform:uppercase;}
+  .measItem button{background:none;border:none;color:var(--text-faint);cursor:pointer;font-size:12px;}
+  .measItem button:hover{color:var(--danger);}
+  .empty{color:var(--text-faint);font-size:11px;line-height:1.6;padding:6px 2px;}
+
+  .toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#1a1006;border:1px solid var(--amber-dim);
+    color:var(--amber);padding:9px 15px;border-radius:8px;font-size:12px;font-family:var(--mono);z-index:200;opacity:0;
+    transition:opacity .25s;pointer-events:none;max-width:75vw;text-align:center;}
+  .toast.show{opacity:1;}
+
+  .scrim{position:fixed;inset:0;background:#000a;backdrop-filter:blur(2px);z-index:150;display:none;align-items:center;justify-content:center;}
+  .scrim.show{display:flex;}
+  .modal{width:min(980px,95vw);height:min(780px,90vh);background:var(--bg-panel);border:1px solid var(--line-strong);
+    border-radius:10px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 80px #000a;}
+  .modalHead{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line-strong);
+    background:linear-gradient(180deg,#12151c,#0d0f14);}
+  .modalHead .title{font-family:var(--mono);font-size:12px;letter-spacing:2px;color:var(--amber);text-transform:uppercase;}
+  .modalClose{background:none;border:none;color:var(--text-faint);font-size:18px;cursor:pointer;margin-left:auto;}
+  .modalClose:hover{color:var(--text);}
+  .modalBody{flex:1;overflow-y:auto;padding:16px;}
+  .repGrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .repSection{background:var(--bg-panel-2);border:1px solid var(--line-strong);border-radius:8px;padding:12px;}
+  .repSectionTitle{font-family:var(--mono);font-size:9.5px;letter-spacing:2px;color:var(--amber);text-transform:uppercase;margin-bottom:10px;}
+  .repRow2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;}
+  .repField{display:flex;flex-direction:column;gap:3px;margin-bottom:8px;}
+  .repField.full{grid-column:1/-1;}
+  .repField label{font-family:var(--mono);font-size:9px;letter-spacing:1px;color:var(--text-faint);text-transform:uppercase;}
+  .repField input, .repField textarea{background:var(--bg-void);border:1px solid var(--line-strong);color:var(--text);
+    border-radius:5px;padding:6px 8px;font-family:var(--sans);font-size:11.5px;outline:none;resize:vertical;}
+  .repField input:focus, .repField textarea:focus{border-color:var(--cyan-dim);}
+  .modalFoot{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-top:1px solid var(--line-strong);background:#0c0e14;}
+  .miniNote{font-family:var(--mono);font-size:9.5px;color:var(--text-faint);}
+  ::-webkit-scrollbar{width:8px;height:8px;} ::-webkit-scrollbar-thumb{background:#2a3040;border-radius:4px;}
+
+  /* ---- PACS additions ---- */
+  .ptBanner{display:flex;align-items:center;gap:8px;min-width:0;font-size:11.5px;white-space:nowrap;overflow:hidden;}
+  .ptBanner b{font-family:var(--mono);color:var(--text);font-size:12px;letter-spacing:.5px;}
+  .ptBanner .muted{color:var(--text-dim);}
+  .chip{font-family:var(--mono);font-size:9px;letter-spacing:1px;text-transform:uppercase;padding:2px 7px;border-radius:10px;
+    border:1px solid var(--line-strong);color:var(--text-dim);flex:none;}
+  .chip.unread{color:#9fb4ff;border-color:#34407a;} .chip.opened{color:var(--text-dim);}
+  .chip.draft{color:var(--amber);border-color:var(--amber-dim);} .chip.preliminary{color:#ffcf6b;border-color:#8a6000;background:#2a1f06;}
+  .chip.final{color:var(--green);border-color:#2f6b36;background:#0d2412;}
+  .chip.stat{color:#fff;background:#8f1d1d;border-color:#c33;} .chip.urgent{color:#ffb4ac;border-color:#a33;}
+  .userChip{font-family:var(--mono);font-size:10px;color:var(--text-dim);white-space:nowrap;}
+  .studyRow{display:flex;justify-content:space-between;gap:6px;font-size:10.5px;padding:2px 0;}
+  .studyRow .k{font-family:var(--mono);color:var(--cyan);font-size:9.5px;text-transform:uppercase;}
+  .studyRow .d{color:var(--text-faint);font-family:var(--mono);font-size:9.5px;}
+  .priorItem{display:flex;justify-content:space-between;align-items:center;gap:6px;border:1px solid var(--line-strong);border-radius:5px;
+    padding:4px 7px;margin:3px 0;font-size:10.5px;cursor:pointer;background:var(--bg-panel-2);}
+  .priorItem:hover{border-color:var(--cyan-dim);color:var(--cyan);}
+  .subHead{font-family:var(--mono);font-size:8.5px;letter-spacing:1.5px;color:var(--text-faint);text-transform:uppercase;margin:7px 0 2px;}
+  .hmState{font-family:var(--mono);font-size:8.5px;letter-spacing:0;color:var(--text-dim);text-transform:none;}
+  .hmState.ok{color:var(--green);} .hmState.busy{color:var(--amber);} .hmState.bad{color:var(--danger);}
+  .d3row .chk{min-width:62px;margin:0;}
+  .repInfo{font-size:11px;line-height:1.7;color:var(--text);}
+  .repInfo .lbl{color:var(--text-faint);font-family:var(--mono);font-size:9px;letter-spacing:1px;text-transform:uppercase;margin-right:5px;}
+  .repHist a{color:var(--cyan);text-decoration:none;font-family:var(--mono);font-size:10px;}
+  .repHist div{display:flex;justify-content:space-between;gap:8px;padding:3px 0;border-bottom:1px solid #ffffff08;font-size:10.5px;}
+  .repField textarea[readonly], .repField input[readonly]{opacity:.75;}
+  .loadingVeil{position:fixed;inset:0;background:#000a;z-index:300;display:none;align-items:center;justify-content:center;
+    font-family:var(--mono);color:var(--amber);font-size:12px;letter-spacing:2px;}
+  .loadingVeil.show{display:flex;}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="topbar">
+    <div class="row">
+      <div class="brand"><span class="dot"></span>NEUROMPR<small>&nbsp;/ PACS viewer</small></div>
+      <div class="sep"></div>
+      <button class="btn" id="backBtn" title="Back to the worklist">◀ Worklist</button>
+      <button class="btn" id="prevStudyBtn" title="Previous study in the worklist ( [ )">‹</button>
+      <button class="btn" id="nextStudyBtn" title="Next study in the worklist ( ] )">›</button>
+      <div class="sep"></div>
+      <div class="ptBanner" id="ptBanner"><span class="muted">Opening study…</span></div>
+      <div class="spacer"></div>
+      <div class="label">SERIES</div>
+      <select id="modSel"></select>
+      <span class="segLabel" id="caseLabel"></span>
+      <div class="sep"></div>
+      <span class="userChip" id="userChip"></span>
+    </div>
+
+    <div class="row">
+      <div class="label">TOOLS</div>
+      <div class="toolgroup" id="toolGroup">
+        <button class="tbtn active" data-tool="wl" title="Window / Level (drag)">W/L</button>
+        <button class="tbtn" data-tool="pan" title="Pan">PAN</button>
+        <button class="tbtn" data-tool="zoom" title="Zoom (drag up/down)">ZOOM</button>
+        <button class="tbtn" data-tool="crosshair" title="Click to move MPR crosshair">XHAIR</button>
+        <button class="tbtn" data-tool="length" title="Length measurement">LEN</button>
+        <button class="tbtn" data-tool="rect" title="Rectangle ROI (mean/std)">RECT</button>
+        <button class="tbtn" data-tool="ellipse" title="Ellipse ROI">ELLIP</button>
+        <button class="tbtn" data-tool="probe" title="Point probe">PROBE</button>
+      </div>
+      <div class="sep"></div>
+      <button class="btn" id="resetViewBtn">Reset view</button>
+      <div class="sep"></div>
+      <div class="label">SEG</div>
+      <button class="btn amber" id="gtSegBtn" title="Use the dataset's own ground-truth segmentation, unmodified" style="display:none;">Ground truth</button>
+      <button class="btn" id="autoSegBtn">Auto-segment</button>
+      <button class="btn" id="modelSegBtn">Model segment</button>
+      <button class="tbtn toggle on" id="overlayToggle" title="Show/hide segmentation overlay">OVLY</button>
+      <div class="label">OPACITY</div>
+      <input type="range" id="opacityRange" class="range" min="0" max="100" value="45" style="width:70px;">
+      <div class="sep"></div>
+      <button class="tbtn toggle" id="restoreToggle" title="Show brain-restoration (inpainted) images in 2D">RESTORE-2D</button>
+      <div class="spacer"></div>
+      <button class="btn amber" id="reportBtn">Diagnostic report</button>
+    </div>
+
+    <div class="row">
+      <div class="label">3D</div>
+      <div class="label">MODE</div>
+      <select id="mode3d">
+        <option value="full">Full brain</option>
+        <option value="isolate">Tumor isolation</option>
+        <option value="restored">Brain restoration</option>
+      </select>
+      <div class="label">MODALITY</div>
+      <select id="mod3d"></select>
+      <button class="btn primary" id="render3dBtn">Render 3D</button>
+      <div class="label">TISSUE OPACITY</div>
+      <input type="range" id="opacity3dRange" class="range" min="0" max="100" value="70" style="width:70px;">
+      <button class="btn" id="fs3dBtn" title="Fullscreen the 3D panel (Shift+F)">⛶ Fullscreen</button>
+      <div class="sep"></div>
+      <span class="miniNote" id="status3d"></span>
+    </div>
+  </div>
+
+  <div class="body">
+    <div class="grid" id="grid">
+      <div class="vpanel" id="vp-axial" data-plane="axial">
+        <div class="vpTag">AXIAL</div>
+        <div class="vpMetaTR" id="metaWL-axial"></div>
+        <div class="stage" id="stage-axial">
+          <img id="img-axial">
+          <canvas id="ov-axial"></canvas>
+        </div>
+        <div class="vpEmpty" id="empty-axial">Load a case to begin.</div>
+        <div class="cineBar">
+          <button id="cine-axial-play" title="Play/pause cine">▶</button>
+          <input type="range" id="cine-axial-slider" min="0" max="0" value="0">
+          <span class="cnt" id="cine-axial-cnt">0 / 0</span>
+        </div>
+      </div>
+      <div class="vpanel" id="vp-sagittal" data-plane="sagittal">
+        <div class="vpTag">SAGITTAL</div>
+        <div class="vpMetaTR" id="metaWL-sagittal"></div>
+        <div class="stage" id="stage-sagittal">
+          <img id="img-sagittal">
+          <canvas id="ov-sagittal"></canvas>
+        </div>
+        <div class="vpEmpty" id="empty-sagittal"></div>
+        <div class="cineBar">
+          <button id="cine-sagittal-play" title="Play/pause cine">▶</button>
+          <input type="range" id="cine-sagittal-slider" min="0" max="0" value="0">
+          <span class="cnt" id="cine-sagittal-cnt">0 / 0</span>
+        </div>
+      </div>
+      <div class="vpanel" id="vp-coronal" data-plane="coronal">
+        <div class="vpTag">CORONAL</div>
+        <div class="vpMetaTR" id="metaWL-coronal"></div>
+        <div class="stage" id="stage-coronal">
+          <img id="img-coronal">
+          <canvas id="ov-coronal"></canvas>
+        </div>
+        <div class="vpEmpty" id="empty-coronal"></div>
+        <div class="cineBar">
+          <button id="cine-coronal-play" title="Play/pause cine">▶</button>
+          <input type="range" id="cine-coronal-slider" min="0" max="0" value="0">
+          <span class="cnt" id="cine-coronal-cnt">0 / 0</span>
+        </div>
+      </div>
+      <div class="vpanel" id="vp-3d">
+        <div class="vpTag">3D VOLUME (niivue)</div>
+        <div class="meta3d" id="meta3d"></div>
+        <div class="vpBtns">
+          <button class="fsBtn toolsBtn" id="tools3dBtn" title="3D tools: layout, panorama, cut-away, crop, appearance, tumor (T)">⚙ 3D tools</button>
+          <button class="fsBtn" id="fs3dBtnInline" title="Fullscreen (Shift+F)">⛶</button>
+        </div>
+        <!-- the canvas stops above the bottom bar so niivue's orientation cube and every capture stay fully visible -->
+        <div class="nvWrap"><canvas id="niivueCanvas"></canvas></div>
+        <div class="vpEmpty" id="empty-3d">Click "Render 3D" — or SCALP / SKULL below for the head.</div>
+
+        <!-- bottom view bar: orbit + view presets + capture (mirrors the 2D cine bars) -->
+        <div class="bar3d" id="bar3d">
+          <button class="b" id="orbitBtn" title="Panoramic orbit — play/pause (O)">▶</button>
+          <span class="lbl">ORBIT</span>
+          <input type="range" id="orbitSpeed" min="5" max="120" value="30" title="Orbit speed (°/s)">
+          <div class="vsep"></div>
+          <span class="lbl">VIEW</span>
+          <button class="b" data-view="A" title="Anterior (front)">A</button>
+          <button class="b" data-view="P" title="Posterior (back)">P</button>
+          <button class="b" data-view="L" title="Patient left">L</button>
+          <button class="b" data-view="R" title="Patient right">R</button>
+          <button class="b" data-view="S" title="Superior (top)">S</button>
+          <button class="b" data-view="I" title="Inferior (bottom)">I</button>
+          <button class="b" data-view="T" title="Face the tumor">◎</button>
+          <div class="vsep"></div>
+          <span class="lbl">HEAD</span>
+          <button class="b" id="scalpBtn" title="Atlas-fitted scalp on/off">SCALP</button>
+          <button class="b" id="skullBtn" title="Atlas-fitted skull on/off">SKULL</button>
+          <div class="vsep"></div>
+          <button class="b" id="snap3dBtn" title="Download a PNG of the 3D view">PNG</button>
+          <button class="b" id="pano3dBtnBar" title="Capture a multi-angle panorama strip">PANO</button>
+        </div>
+
+        <!-- tools drawer -->
+        <div class="drawer3d" id="drawer3d">
+          <div class="d3sec">
+            <div class="d3title">Layout</div>
+            <div class="d3row"><select id="layout3d">
+              <option value="render">3D render</option>
+              <option value="lightbox">Axial lightbox through tumor</option>
+              <option value="mpr">Slices + 3D (niivue MPR)</option>
+            </select></div>
+            <div class="d3row"><label>Zoom</label><input type="range" id="zoom3d" min="50" max="200" value="100"><span class="val" id="zoom3dVal">1.00×</span></div>
+            <label class="chk"><input type="checkbox" id="link3d" checked> Link crosshair 2D ↔ 3D</label>
+            <label class="chk"><input type="checkbox" id="xhair3d"> Show crosshair in 3D</label>
+            <label class="chk"><input type="checkbox" id="cube3d" checked> Orientation cube</label>
+            <div class="d3hint">With linking on, double-clicking a point on the 3D surface moves all 2D views there, and moving the 2D crosshair moves the 3D one.</div>
+          </div>
+
+          <div class="d3sec" id="headSec3d">
+            <div class="d3title">Head: scalp &amp; skull <span class="hmState" id="hmState"></span></div>
+            <div class="d3row"><label class="chk"><input type="checkbox" id="scalpOn"> Scalp</label><input type="range" id="scalpOp" min="0" max="100" value="100" title="Scalp opacity (lower = transparent)"><span class="val" id="scalpOpVal">100%</span></div>
+            <div class="d3row"><label class="chk"><input type="checkbox" id="skullOn"> Skull</label><input type="range" id="skullOp" min="0" max="100" value="100" title="Skull opacity (lower = transparent)"><span class="val" id="skullOpVal">100%</span></div>
+            <div class="d3btns">
+              <button class="btn" data-headpreset="opaque" title="Solid scalp and skull">Opaque</button>
+              <button class="btn" data-headpreset="glass" title="See-through scalp and skull: the brain and tumour show inside">Glass</button>
+              <button class="btn" data-headpreset="skull" title="Skull only, see-through">Skull only</button>
+              <button class="btn" data-headpreset="off">Off</button>
+            </div>
+            <div class="d3hint" id="hmHint">Atlas-fitted: real head anatomy (average of real CT scans) fitted to this brain. BraTS scans are skull-stripped, so this is not the patient's own scalp or skull. The cut-away plane and box crop cut it too.</div>
+          </div>
+
+          <div class="d3sec">
+            <div class="d3title">Panoramic</div>
+            <div class="d3row"><label>Orbit</label><select id="orbitMode">
+              <option value="spin">360° turntable</option>
+              <option value="rock">Rock ±40°</option>
+            </select></div>
+            <div class="d3row"><label>Tilt</label><input type="range" id="orbitElev" min="-60" max="60" value="10"><span class="val" id="orbitElevVal">10°</span></div>
+            <div class="d3row"><label>Views</label><select id="panoFrames">
+              <option value="ortho">6 orthogonal (A·P·L·R·S·I)</option>
+              <option value="8" selected>Ring of 8 (45° steps)</option>
+              <option value="12">Ring of 12 (30° steps)</option>
+              <option value="6">Ring of 6 (60° steps)</option>
+            </select></div>
+            <div class="d3btns">
+              <button class="btn amber" id="pano3dBtn">Capture panorama</button>
+              <button class="btn" id="rec3dBtn" title="Record one full 360° turn (≈8 s, 120 frames) as a WebM clip">Record 360° clip</button>
+            </div>
+            <img class="panoPrev" id="panoPrev" alt="Panorama preview">
+            <label class="chk" id="panoIncludeRow" style="display:none;"><input type="checkbox" id="panoInclude" checked> Include panorama in report</label>
+            <div class="d3btns" id="panoActions" style="display:none;">
+              <button class="btn" id="panoDlBtn">Download PNG</button>
+              <button class="btn" id="panoClearBtn">Discard</button>
+            </div>
+          </div>
+
+          <div class="d3sec">
+            <div class="d3title">Cut-away plane <label class="chk" style="margin:0;"><input type="checkbox" id="clipOn"> on</label></div>
+            <div class="d3row"><label>Depth</label><input type="range" id="clipDepth" min="-100" max="100" value="0"><span class="val" id="clipDepthVal">0.00</span></div>
+            <div class="d3row"><label>Azimuth</label><input type="range" id="clipAzi" min="0" max="359" value="90"><span class="val" id="clipAziVal">90°</span></div>
+            <div class="d3row"><label>Elevation</label><input type="range" id="clipElev" min="-90" max="90" value="0"><span class="val" id="clipElevVal">0°</span></div>
+            <div class="d3row"><label>Slab</label><input type="range" id="clipThick" min="2" max="200" value="200"><span class="val" id="clipThickVal">off</span></div>
+            <div class="d3btns"><button class="btn" id="clipAimBtn" title="Point the cut at the current camera so it opens the brain toward you">Aim cut at camera</button></div>
+            <div class="d3hint">Switching on aims the cut at you. While on: mouse-wheel over the 3D view moves the cut, right-drag tilts it. A narrow slab keeps only a thick slice of brain.</div>
+          </div>
+
+          <div class="d3sec">
+            <div class="d3title">Box crop</div>
+            <div class="d3row"><label>L edge</label><input type="range" id="cropX0" min="0" max="100" value="0"><span class="val" id="cropX0Val">0%</span></div>
+            <div class="d3row"><label>R edge</label><input type="range" id="cropX1" min="0" max="100" value="100"><span class="val" id="cropX1Val">100%</span></div>
+            <div class="d3row"><label>P edge</label><input type="range" id="cropY0" min="0" max="100" value="0"><span class="val" id="cropY0Val">0%</span></div>
+            <div class="d3row"><label>A edge</label><input type="range" id="cropY1" min="0" max="100" value="100"><span class="val" id="cropY1Val">100%</span></div>
+            <div class="d3row"><label>I edge</label><input type="range" id="cropZ0" min="0" max="100" value="0"><span class="val" id="cropZ0Val">0%</span></div>
+            <div class="d3row"><label>S edge</label><input type="range" id="cropZ1" min="0" max="100" value="100"><span class="val" id="cropZ1Val">100%</span></div>
+            <div class="d3btns">
+              <button class="btn" id="cropTumorBtn">Crop to tumor</button>
+              <button class="btn" id="cropResetBtn">Reset crop</button>
+            </div>
+          </div>
+
+          <div class="d3sec">
+            <div class="d3title">Brain appearance</div>
+            <div class="d3row"><label>Colormap</label><select id="cmap3d"></select></div>
+            <div class="d3row"><label>Shading</label><input type="range" id="shade3d" min="0" max="100" value="50"><span class="val" id="shade3dVal">0.50</span></div>
+            <div class="d3row"><label>Edges</label><input type="range" id="edge3d" min="0" max="100" value="0" title="Gradient opacity: makes flat tissue see-through and keeps edges, so a deep tumor shows through the cortex"><span class="val" id="edge3dVal">0.00</span></div>
+            <div class="d3row"><label>Backgrnd</label><select id="bg3d">
+              <option value="dark">Dark</option>
+              <option value="black">Black</option>
+              <option value="white">White (print)</option>
+            </select></div>
+          </div>
+
+          <div class="d3sec">
+            <div class="d3title">Performance <span class="hmState" id="fpsVal"></span></div>
+            <div class="d3row"><label>Quality</label><select id="quality3d">
+              <option value="auto">Auto (measured on this PC)</option>
+              <option value="high">High</option>
+              <option value="balanced">Balanced</option>
+              <option value="fast">Fast (no graphics card: half-resolution 3D)</option>
+            </select></div>
+            <label class="chk"><input type="checkbox" id="dragLow" checked> Lower resolution while rotating / orbiting</label>
+            <div class="d3hint">Auto times a frame on this PC and picks the setting. Fast renders fewer pixels and uses a half-resolution 3D volume (the 2D views stay full resolution), which keeps rotation responsive on a PC without a graphics card. Full detail returns when you let go.</div>
+          </div>
+
+          <div class="d3sec" id="tumorSec3d">
+            <div class="d3title">Tumor</div>
+            <div class="d3row"><label>Colors</label><select id="tumorMode3d">
+              <option value="uniform">Uniform red</option>
+              <option value="regions">By sub-region</option>
+            </select></div>
+            <label class="chk"><input type="checkbox" class="tumorVis" data-label="1" checked><span class="swatch" data-sw="1"></span> NCR/NET — necrotic core</label>
+            <label class="chk"><input type="checkbox" class="tumorVis" data-label="2" checked><span class="swatch" data-sw="2"></span> ED — peritumoral edema</label>
+            <label class="chk"><input type="checkbox" class="tumorVis" data-label="4" checked><span class="swatch" data-sw="4"></span> ET — enhancing tumor</label>
+            <label class="chk" id="rcRow" style="display:none;"><input type="checkbox" class="tumorVis" data-label="5" checked><span class="swatch" data-sw="5"></span> RC — resection cavity</label>
+            <div class="d3row"><label>Opacity</label><input type="range" id="tumorOp3d" min="5" max="100" value="60"><span class="val" id="tumorOp3dVal">60%</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="rightPanel">
+      <div class="panelHead">Study</div>
+      <div class="panelBody" id="studyBody" style="flex:0 0 auto;max-height:230px;"><div class="empty">…</div></div>
+      <div class="panelHead">Tumor volumetrics</div>
+      <div class="panelBody" id="statsBody">
+        <div class="empty">Run Auto-segment or Model segment to compute tumor volume and per-region breakdown.</div>
+      </div>
+      <div class="panelHead">Measurements <span class="hmState" id="annState" style="float:right;"></span></div>
+      <div class="panelBody" id="measBody" style="flex:0 0 200px;">
+        <div class="empty">Draw LEN / RECT / ELLIP / PROBE on any 2D view.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="loadingVeil" id="veil">OPENING STUDY…</div>
+
+<!-- REPORT MODAL -->
+<div class="scrim" id="repScrim">
+  <div class="modal">
+    <div class="modalHead">
+      <span class="title">Neuro-Oncology Report</span>
+      <span class="chip" id="repStatus">new</span>
+      <button class="modalClose" id="repClose">&times;</button>
+    </div>
+    <div class="modalBody">
+      <div class="repGrid">
+        <div class="repSection">
+          <div class="repSectionTitle">Patient &amp; Study (from the archive)</div>
+          <div class="repInfo" id="repInfo"></div>
+          <div class="repRow2" style="margin-top:8px;">
+            <div class="repField"><label>Referring Physician</label><input id="f-referrer"></div>
+            <div class="repField"><label>Reporting Physician</label><input id="f-radiologist"></div>
+          </div>
+          <div class="repField full"><label>Clinical Indication</label><textarea id="f-indication" rows="2"></textarea></div>
+          <div class="repField full"><label>Technique</label><textarea id="f-technique" rows="2" placeholder="Multi-parametric MRI brain (T1, T1CE, T2, FLAIR)"></textarea></div>
+          <div class="repSectionTitle" style="margin-top:12px;">History</div>
+          <div class="repHist" id="repHist"><div class="miniNote">No report yet.</div></div>
+        </div>
+        <div class="repSection">
+          <div class="repSectionTitle">Report body</div>
+          <div class="repField full"><label>Findings</label><textarea id="f-findings" rows="6"></textarea></div>
+          <div class="repField full"><label>Impression</label><textarea id="f-impression" rows="3"></textarea></div>
+          <div class="repField full"><label>Recommendations</label><textarea id="f-recommendations" rows="2"></textarea></div>
+          <div class="repField full" id="addendumRow" style="display:none;"><label>Addendum (the signed final report stays unchanged)</label><textarea id="f-addendum" rows="3"></textarea></div>
+        </div>
+      </div>
+      <div class="repSection" style="margin-top:14px;">
+        <div class="repSectionTitle">Included when you sign</div>
+        <div class="miniNote" id="repIncludeNote">The current Axial / Sagittal / Coronal views, the 3D render (if rendered) and the 3D panorama (if captured) are attached as images, with tumor volumetrics and your measurements. Drafts save the text only.</div>
+      </div>
+    </div>
+    <div class="modalFoot">
+      <span class="miniNote" id="repFootNote">Prototype — not for clinical use</span>
+      <div style="display:flex;gap:8px;">
+        <button class="btn" id="repCancelBtn">Close</button>
+        <button class="btn" id="repDraftBtn">Save draft</button>
+        <button class="btn amber" id="repPrelimBtn" title="Sign as a preliminary report">Sign preliminary</button>
+        <button class="btn primary" id="repFinalBtn" title="Sign the final report (locks it; later changes go in an addendum)">Sign final</button>
+        <button class="btn primary" id="repAddBtn" style="display:none;">Sign addendum</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { Niivue, NVMesh, SLICE_TYPE, SHOW_RENDER, MULTIPLANAR_TYPE } from "/static/vendor/niivue-0.57.0.js";
+(function(){
+"use strict";
+
+/* ============================== STATE ============================== */
+const PLANES = ["axial","sagittal","coronal"];
+const ST = {
+  caseInfo: null,
+  modality: null,
+  wc: null, ww: null,
+  overlay: true,
+  opacity: 0.45,
+  showRestored: false,
+  cursor: {i:0,j:0,k:0},
+  tool: "wl",
+  measurements: [],
+  lastPlot3d: false,
+  studyPk: null,          // archive study id (the viewer always shows one PACS study)
+  user: null,
+};
+
+const VP = {}; // plane -> {el,stage,img,canvas,ctx,view:{scale,panX,panY},drag,natW,natH}
+
+function toast(msg, ms=3400){
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(()=>t.classList.remove("show"), ms);
+}
+function esc(s){ return String(s ?? "").replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function fmtDate(d){ d = String(d||"").replace(/-/g,""); return d.length===8 ? `${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6)}` : (d||""); }
+const STATUS_LABEL = {unread:"Unread", opened:"Viewed", draft:"Draft", preliminary:"Preliminary", final:"Final"};
+function canEdit(){ return !!(ST.user && ST.user.role !== "viewer"); }
+// any API call that finds the session expired sends the user to the sign-in page
+const _fetch = window.fetch.bind(window);
+window.fetch = async (...args)=>{
+  const r = await _fetch(...args);
+  if (r.status === 401 && String(args[0]).startsWith("/api/")){
+    location.href = "/login?next=" + encodeURIComponent(location.pathname + location.search);
+  }
+  return r;
+};
+
+/* ============================== GEOMETRY ============================== */
+function planeRowsCols(shape, plane){
+  const [X,Y,Z] = shape;
+  if (plane==="axial") return [Y,X];
+  if (plane==="coronal") return [Z,X];
+  return [Z,Y]; // sagittal
+}
+function planeSpacing(zooms, plane){
+  const [zx,zy,zz] = zooms;
+  if (plane==="axial") return [zy,zx];
+  if (plane==="coronal") return [zz,zx];
+  return [zz,zy];
+}
+function planeIndex(plane){
+  if (plane==="axial") return ST.cursor.k;
+  if (plane==="coronal") return ST.cursor.j;
+  return ST.cursor.i;
+}
+function setPlaneIndex(plane, val){
+  const shape = ST.caseInfo.shape;
+  const maxIdx = plane==="axial" ? shape[2]-1 : (plane==="coronal" ? shape[1]-1 : shape[0]-1);
+  val = Math.max(0, Math.min(maxIdx, val));
+  if (plane==="axial") ST.cursor.k = val;
+  else if (plane==="coronal") ST.cursor.j = val;
+  else ST.cursor.i = val;
+}
+// forward: given cursor {i,j,k} -> native (row,col) within this plane's slice
+function cursorToNative(plane){
+  const [X,Y,Z] = ST.caseInfo.shape;
+  const {i,j,k} = ST.cursor;
+  if (plane==="axial") return [Y-1-j, i];
+  if (plane==="coronal") return [Z-1-k, i];
+  return [Z-1-k, j]; // sagittal
+}
+// inverse: given native (row,col) clicked in a plane -> update ST.cursor's two free axes
+function nativeToCursor(plane, row, col){
+  const [X,Y,Z] = ST.caseInfo.shape;
+  if (plane==="axial"){ ST.cursor.i = clampI(col); ST.cursor.j = clampJ(Y-1-row); }
+  else if (plane==="coronal"){ ST.cursor.i = clampI(col); ST.cursor.k = clampK(Z-1-row); }
+  else { ST.cursor.j = clampJ(col); ST.cursor.k = clampK(Z-1-row); }
+}
+function clampI(v){ return Math.max(0, Math.min(ST.caseInfo.shape[0]-1, Math.round(v))); }
+function clampJ(v){ return Math.max(0, Math.min(ST.caseInfo.shape[1]-1, Math.round(v))); }
+function clampK(v){ return Math.max(0, Math.min(ST.caseInfo.shape[2]-1, Math.round(v))); }
+
+function displayedToNative(plane, dr, dc){
+  const vp = VP[plane];
+  const [rowsN, colsN] = planeRowsCols(ST.caseInfo.shape, plane);
+  const row = dr / vp.natH * rowsN;
+  const col = dc / vp.natW * colsN;
+  return [row, col];
+}
+function nativeToDisplayed(plane, row, col){
+  const vp = VP[plane];
+  const [rowsN, colsN] = planeRowsCols(ST.caseInfo.shape, plane);
+  return [row/rowsN*vp.natH, col/colsN*vp.natW];
+}
+
+/* ============================== INIT VIEWPORTS ============================== */
+function initViewports(){
+  PLANES.forEach(plane=>{
+    const el = document.getElementById("vp-"+plane);
+    const stage = document.getElementById("stage-"+plane);
+    const img = document.getElementById("img-"+plane);
+    const canvas = document.getElementById("ov-"+plane);
+    const vp = { plane, el, stage, img, canvas, ctx: canvas.getContext("2d"),
+                 view:{scale:1,panX:0,panY:0}, drag:null, natW:0, natH:0 };
+    VP[plane] = vp;
+    img.addEventListener("load", ()=>{
+      vp.natW = img.naturalWidth; vp.natH = img.naturalHeight;
+      img.style.width = vp.natW+"px"; img.style.height = vp.natH+"px";
+      canvas.width = vp.natW; canvas.height = vp.natH;
+      canvas.style.width = vp.natW+"px"; canvas.style.height = vp.natH+"px";
+      stage.style.width = vp.natW+"px"; stage.style.height = vp.natH+"px";
+      applyTransform(vp);
+      drawOverlay(plane);
+      document.getElementById("empty-"+plane).style.display = "none";
+    });
+    attachInteraction(vp);
+    el.addEventListener("mousedown", ()=>setActiveVp(plane), true);
+    el.addEventListener("wheel", e=>{
+      if (!ST.caseInfo) return;
+      e.preventDefault();
+      setActiveVp(plane);
+      if (e.ctrlKey || e.metaKey){
+        vp.view.scale = Math.max(0.05, Math.min(20, vp.view.scale*(e.deltaY<0?1.08:0.92)));
+        applyTransform(vp);
+      } else {
+        setPlaneIndex(plane, planeIndex(plane) + (e.deltaY>0?1:-1));
+        refreshPlane(plane);
+        redrawAllOverlays();
+      }
+    }, {passive:false});
+  });
+}
+function setActiveVp(plane){
+  document.querySelectorAll(".vpanel").forEach(v=>v.classList.remove("active"));
+  document.getElementById("vp-"+plane).classList.add("active");
+}
+function applyTransform(vp){
+  const {scale,panX,panY} = vp.view;
+  vp.stage.style.transform = `translate(${panX - vp.natW/2*scale}px, ${panY - vp.natH/2*scale}px) scale(${scale})`;
+}
+function resetView(plane){
+  const vp = VP[plane];
+  vp.view.scale = 1; vp.view.panX = 0; vp.view.panY = 0;
+  if (vp.natW){
+    const rect = vp.el.getBoundingClientRect();
+    const fit = Math.min((rect.width-40)/vp.natW, (rect.height-40)/vp.natH, 4);
+    vp.view.scale = Math.max(fit, 0.05);
+  }
+  applyTransform(vp);
+}
+document.getElementById("resetViewBtn").onclick = ()=> PLANES.forEach(resetView);
+window.addEventListener("resize", ()=> PLANES.forEach(p=>{ if(VP[p].natW) resetView(p); }));
+
+/* ============================== SLICE FETCH ============================== */
+function planeTotal(plane){
+  const shape = ST.caseInfo.shape;
+  return plane==="axial"? shape[2] : (plane==="coronal"? shape[1] : shape[0]);
+}
+function refreshPlane(plane){
+  if (!ST.caseInfo) return;
+  const idx = planeIndex(plane);
+  const params = new URLSearchParams({
+    case_id: ST.caseInfo.case_id, modality: ST.modality, plane, index: idx,
+    wc: ST.wc, ww: ST.ww, overlay: ST.overlay?"1":"0", opacity: ST.opacity,
+    restored: ST.showRestored?"1":"0"
+  });
+  VP[plane].img.src = "/api/slice?"+params.toString();
+  const total = planeTotal(plane);
+  document.getElementById("metaWL-"+plane).textContent = `WC ${Math.round(ST.wc)} / WW ${Math.round(ST.ww)}`;
+  updateCineBar(plane, idx, total);
+}
+function refreshAllPlanes(){ PLANES.forEach(refreshPlane); }
+
+/* ============================== CINE ============================== */
+function updateCineBar(plane, idx, total){
+  const slider = document.getElementById("cine-"+plane+"-slider");
+  const cnt = document.getElementById("cine-"+plane+"-cnt");
+  const maxIdx = Math.max(0, total-1);
+  if (slider){
+    if (slider.max != maxIdx) slider.max = maxIdx;
+    if (parseInt(slider.value, 10) !== idx) slider.value = idx;
+  }
+  if (cnt) cnt.textContent = `${idx+1} / ${total}`;
+}
+function stopCine(plane){
+  const vp = VP[plane];
+  if (vp.cineTimer){ clearInterval(vp.cineTimer); vp.cineTimer = null; }
+  const btn = document.getElementById("cine-"+plane+"-play");
+  if (btn) btn.textContent = "▶";
+}
+function stopAllCine(){ PLANES.forEach(stopCine); }
+function toggleCine(plane){
+  if (!ST.caseInfo) return;
+  const vp = VP[plane];
+  if (vp.cineTimer){
+    stopCine(plane);
+    return;
+  }
+  document.getElementById("cine-"+plane+"-play").textContent = "❚❚";
+  vp.cineTimer = setInterval(()=>{
+    const total = planeTotal(plane);
+    let idx = planeIndex(plane) + 1;
+    if (idx >= total) idx = 0;
+    setPlaneIndex(plane, idx);
+    refreshPlane(plane);
+    redrawAllOverlays();
+  }, 110);
+}
+PLANES.forEach(plane=>{
+  document.getElementById("cine-"+plane+"-play").onclick = ()=> toggleCine(plane);
+  document.getElementById("cine-"+plane+"-slider").addEventListener("input", e=>{
+    if (!ST.caseInfo) return;
+    stopCine(plane);
+    setActiveVp(plane);
+    setPlaneIndex(plane, parseInt(e.target.value, 10));
+    refreshPlane(plane);
+    redrawAllOverlays();
+  });
+});
+
+/* ============================== OVERLAY DRAWING (crosshair + measurements) ============================== */
+function drawOverlay(plane){
+  const vp = VP[plane];
+  const ctx = vp.ctx;
+  ctx.clearRect(0,0,vp.canvas.width, vp.canvas.height);
+  if (!ST.caseInfo) return;
+
+  // crosshair
+  if (vp.natW){
+    const [row,col] = cursorToNative(plane);
+    const [dr,dc] = nativeToDisplayed(plane, row, col);
+    ctx.save();
+    ctx.strokeStyle = "#39d8ffaa";
+    ctx.setLineDash([6/vp.view.scale, 4/vp.view.scale]);
+    ctx.lineWidth = Math.max(1, 1/vp.view.scale);
+    ctx.beginPath();
+    ctx.moveTo(0,dr); ctx.lineTo(vp.canvas.width,dr);
+    ctx.moveTo(dc,0); ctx.lineTo(dc,vp.canvas.height);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // stored measurements for this plane+slice
+  const idx = planeIndex(plane);
+  ctx.lineWidth = Math.max(1, 1.6/vp.view.scale);
+  ctx.font = `${12/vp.view.scale}px Roboto Mono, monospace`;
+  ST.measurements.filter(m=>m.plane===plane && m.sliceIndex===idx).forEach(m=>drawMeasurement(vp,m,false));
+
+  // live drag preview
+  if (vp.drag && vp.drag.preview) drawMeasurement(vp, vp.drag.preview, true);
+}
+function redrawAllOverlays(){ PLANES.forEach(drawOverlay); schedule3DSync(); }  // schedule3DSync: keeps the 3D crosshair linked to the 2D cursor
+
+function drawMeasurement(vp, m, isPreview){
+  const ctx = vp.ctx;
+  ctx.strokeStyle = isPreview ? "#39d8ff" : "#ffb000";
+  ctx.fillStyle = ctx.strokeStyle;
+  const scale = vp.view.scale;
+  function label(text, dr, dc){
+    if (!text) return;
+    ctx.fillStyle = "#0009";
+    const w = ctx.measureText(text).width + 8/scale;
+    ctx.fillRect(dc-2/scale, dr-12/scale, w, 16/scale);
+    ctx.fillStyle = isPreview? "#39d8ff" : "#ffe27a";
+    ctx.fillText(text, dc, dr);
+  }
+  if (m.type==="LENGTH"){
+    const [r1,c1] = nativeToDisplayed(m.plane, m.p1[0], m.p1[1]);
+    const [r2,c2] = nativeToDisplayed(m.plane, m.p2[0], m.p2[1]);
+    ctx.beginPath(); ctx.moveTo(c1,r1); ctx.lineTo(c2,r2); ctx.stroke();
+    label(m.valueText, (r1+r2)/2-8, (c1+c2)/2);
+  } else if (m.type==="RECT" || m.type==="ELLIPSE"){
+    const [r1,c1] = nativeToDisplayed(m.plane, m.p1[0], m.p1[1]);
+    const [r2,c2] = nativeToDisplayed(m.plane, m.p2[0], m.p2[1]);
+    if (m.type==="RECT"){
+      ctx.strokeRect(Math.min(c1,c2), Math.min(r1,r2), Math.abs(c2-c1), Math.abs(r2-r1));
+    } else {
+      const cx=(c1+c2)/2, cy=(r1+r2)/2, rx=Math.abs(c2-c1)/2, ry=Math.abs(r2-r1)/2;
+      ctx.beginPath(); ctx.ellipse(cx,cy,rx,ry,0,0,Math.PI*2); ctx.stroke();
+    }
+    label(m.valueText, Math.min(r1,r2)-8, Math.min(c1,c2));
+  } else if (m.type==="PROBE"){
+    const [r1,c1] = nativeToDisplayed(m.plane, m.p1[0], m.p1[1]);
+    ctx.beginPath(); ctx.arc(c1,r1,4/scale,0,Math.PI*2); ctx.fill();
+    label(m.valueText, r1-10, c1+8);
+  }
+}
+
+/* ============================== INTERACTION ============================== */
+function attachInteraction(vp){
+  vp.stage.addEventListener("mousedown", e=>{
+    if (!ST.caseInfo) return;
+    const rect = vp.stage.getBoundingClientRect();
+    const dc = (e.clientX - rect.left) / vp.view.scale;
+    const dr = (e.clientY - rect.top) / vp.view.scale;
+    const [row,col] = displayedToNative(vp.plane, dr, dc);
+    const tool = ST.tool;
+
+    if (tool==="pan"){
+      vp.drag = {mode:"pan", startX:e.clientX, startY:e.clientY, panX0:vp.view.panX, panY0:vp.view.panY};
+    } else if (tool==="zoom"){
+      vp.drag = {mode:"zoom", startY:e.clientY, scale0:vp.view.scale};
+    } else if (tool==="wl"){
+      vp.drag = {mode:"wl", startX:e.clientX, startY:e.clientY, c0:ST.wc, w0:ST.ww};
+    } else if (tool==="crosshair"){
+      nativeToCursor(vp.plane, row, col);
+      refreshAllPlanes(); redrawAllOverlays();
+    } else if (tool==="length"){
+      vp.drag = {mode:"length", p1:[row,col]};
+    } else if (tool==="rect" || tool==="ellipse"){
+      vp.drag = {mode:tool, p1:[row,col]};
+    } else if (tool==="probe"){
+      doProbe(vp.plane, row, col);
+    }
+    e.preventDefault();
+  });
+
+  window.addEventListener("mousemove", e=>{
+    if (!vp.drag) return;
+    const rect = vp.stage.getBoundingClientRect();
+    const dc = (e.clientX - rect.left) / vp.view.scale;
+    const dr = (e.clientY - rect.top) / vp.view.scale;
+    const [row,col] = displayedToNative(vp.plane, dr, dc);
+    const d = vp.drag;
+
+    if (d.mode==="pan"){
+      vp.view.panX = d.panX0 + (e.clientX-d.startX);
+      vp.view.panY = d.panY0 + (e.clientY-d.startY);
+      applyTransform(vp);
+    } else if (d.mode==="zoom"){
+      const dy = d.startY - e.clientY;
+      vp.view.scale = Math.max(0.05, Math.min(20, d.scale0*Math.pow(1.01,dy)));
+      applyTransform(vp);
+    } else if (d.mode==="wl"){
+      const dx = e.clientX-d.startX, dy=e.clientY-d.startY;
+      ST.ww = Math.max(1, d.w0 + dx*2);
+      ST.wc = d.c0 + dy*2;
+      clearTimeout(refreshPlane._t);
+      refreshPlane._t = setTimeout(()=>refreshAllPlanes(), 30);
+    } else if (d.mode==="length"){
+      const [rsp,csp] = planeSpacing(ST.caseInfo.zooms, vp.plane);
+      const dy=(row-d.p1[0])*rsp, dx=(col-d.p1[1])*csp;
+      const dist = Math.hypot(dx,dy);
+      d.preview = {type:"LENGTH", plane:vp.plane, p1:d.p1, p2:[row,col], valueText:`${dist.toFixed(1)} mm`};
+      drawOverlay(vp.plane);
+    } else if (d.mode==="rect" || d.mode==="ellipse"){
+      d.preview = {type:d.mode.toUpperCase(), plane:vp.plane, p1:d.p1, p2:[row,col], valueText:"…"};
+      drawOverlay(vp.plane);
+    }
+  });
+
+  window.addEventListener("mouseup", async e=>{
+    const d = vp.drag;
+    if (!d) return;
+    if (d.mode==="length" && d.preview){
+      pushMeasurement(vp.plane, d.preview);
+    } else if ((d.mode==="rect" || d.mode==="ellipse") && d.preview){
+      const [r0,c0] = d.preview.p1, [r1,c1] = d.preview.p2;
+      try{
+        const params = new URLSearchParams({case_id:ST.caseInfo.case_id, modality:ST.modality, plane:vp.plane,
+          index: planeIndex(vp.plane), shape: d.mode, r0: Math.round(r0), c0: Math.round(c0), r1: Math.round(r1), c1: Math.round(c1)});
+        const res = await fetch("/api/roi_stats?"+params.toString());
+        const j = await res.json();
+        if (!j.error){
+          d.preview.valueText = `${j.mean.toFixed(1)} ± ${j.std.toFixed(1)}`;
+          d.preview.detail = `area ${j.area_mm2} mm², n=${j.n}, min ${j.min.toFixed(1)} / max ${j.max.toFixed(1)}`;
+          pushMeasurement(vp.plane, d.preview);
+        }
+      } catch(err){ toast("ROI stats failed: "+err); }
+    }
+    vp.drag = null;
+    drawOverlay(vp.plane);
+  });
+}
+async function doProbe(plane, row, col){
+  const params = new URLSearchParams({case_id:ST.caseInfo.case_id, modality:ST.modality, plane,
+    index: planeIndex(plane), row: Math.round(row), col: Math.round(col)});
+  const res = await fetch("/api/probe?"+params.toString());
+  const j = await res.json();
+  if (j.value===null || j.value===undefined) return;
+  const m = {type:"PROBE", plane, p1:[row,col], valueText:`${j.value.toFixed(1)}`, detail: j.label_name? `label: ${j.label_name}` : "background"};
+  pushMeasurement(plane, m);
+}
+function pushMeasurement(plane, m){
+  m.id = "m_"+Math.random().toString(36).slice(2);
+  m.sliceIndex = planeIndex(plane);
+  ST.measurements.push(m);
+  renderMeasList();
+  drawOverlay(plane);
+  scheduleAnnotationSave();
+}
+function scheduleAnnotationSave(){
+  if (!ST.studyPk) return;
+  if (!canEdit()){ document.getElementById("annState").textContent = "read-only, not saved"; return; }
+  document.getElementById("annState").textContent = "saving…";
+  clearTimeout(scheduleAnnotationSave._t);
+  scheduleAnnotationSave._t = setTimeout(async ()=>{
+    try{
+      const r = await fetch(`/api/studies/${ST.studyPk}/annotations`, {method:"PUT", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({measurements: ST.measurements})});
+      document.getElementById("annState").textContent = r.ok ? "saved to archive" : "save failed";
+    }catch(e){ document.getElementById("annState").textContent = "save failed"; }
+  }, 600);
+}
+function renderMeasList(){
+  const body = document.getElementById("measBody");
+  if (!ST.measurements.length){
+    body.innerHTML = `<div class="empty">Draw LEN / RECT / ELLIP / PROBE on any 2D view.</div>`;
+    return;
+  }
+  body.innerHTML = "";
+  ST.measurements.slice().reverse().forEach(m=>{
+    const div = document.createElement("div");
+    div.className = "measItem";
+    div.innerHTML = `<div class="r1"><span class="tag">${m.type} · ${m.plane}</span><button>&times;</button></div>
+      <div style="font-weight:700;margin-top:2px;">${m.valueText||""}</div>
+      <div style="color:var(--text-faint);font-size:9.5px;">${m.detail||""} · slice ${m.sliceIndex+1}</div>`;
+    div.querySelector("button").onclick = ()=>{
+      const idx = ST.measurements.findIndex(x=>x.id===m.id);
+      if (idx>=0) ST.measurements.splice(idx,1);
+      renderMeasList(); redrawAllOverlays(); scheduleAnnotationSave();
+    };
+    body.appendChild(div);
+  });
+}
+document.getElementById("toolGroup").addEventListener("click", e=>{
+  const btn = e.target.closest(".tbtn[data-tool]");
+  if (!btn) return;
+  ST.tool = btn.dataset.tool;
+  document.querySelectorAll("#toolGroup .tbtn").forEach(b=>b.classList.toggle("active", b===btn));
+});
+
+/* ============================== STUDY LOADING (PACS) ============================== */
+function worklistIds(){
+  try{ return (JSON.parse(sessionStorage.getItem("neurompr.worklist") || "{}").ids || []).map(Number); }catch(e){ return []; }
+}
+function neighbourStudy(step){
+  const ids = worklistIds(), i = ids.indexOf(Number(ST.studyPk));
+  if (i < 0) return null;
+  const k = i + step;
+  return (k >= 0 && k < ids.length) ? ids[k] : null;
+}
+function updateNavButtons(){
+  const p = neighbourStudy(-1), n = neighbourStudy(1);
+  document.getElementById("prevStudyBtn").disabled = p === null;
+  document.getElementById("nextStudyBtn").disabled = n === null;
+}
+async function openStudy(pk){
+  if (!pk){ toast("No study selected — open one from the worklist."); return; }
+  stopAllCine();
+  if (typeof stopOrbit === "function") stopOrbit();
+  document.getElementById("veil").classList.add("show");
+  try{
+    const r = await fetch(`/api/studies/${pk}/open`, {method:"POST"});
+    const j = await r.json();
+    if (j.error){ toast("Could not open study: " + j.error, 6000); return; }
+    ST.studyPk = Number(pk);
+    ST.user = j.user;
+    history.replaceState(null, "", `/viewer?study=${pk}`);
+    resetHead();
+    applyLoadedCase(j);
+    setHeadState(j.headmodel);
+    updateNavButtons();
+    const nxt = neighbourStudy(1);
+    if (nxt) setTimeout(()=> fetch(`/api/studies/${nxt}/prefetch`, {method:"POST"}).catch(()=>{}), 1500);
+  } catch(e){
+    toast("Open error: " + e, 6000);
+  } finally {
+    document.getElementById("veil").classList.remove("show");
+  }
+}
+document.getElementById("backBtn").onclick = ()=>{ location.href = ST.studyPk ? `/?study=${ST.studyPk}` : "/"; };
+document.getElementById("prevStudyBtn").onclick = ()=>{ const k = neighbourStudy(-1); if (k) openStudy(k); };
+document.getElementById("nextStudyBtn").onclick = ()=>{ const k = neighbourStudy(1); if (k) openStudy(k); };
+
+function renderBanner(st){
+  const el = document.getElementById("ptBanner");
+  if (!st){ el.innerHTML = ""; return; }
+  const demo = [st.sex, fmtDate(st.birth_date)].filter(Boolean).join(" · ");
+  el.innerHTML = `<b>${esc(st.patient_id)}</b>`
+    + (st.patient_name ? `<span>${esc(st.patient_name)}</span>` : `<span class="muted">anonymised</span>`)
+    + (demo ? `<span class="muted">${esc(demo)}</span>` : "")
+    + `<span class="muted">${esc(fmtDate(st.study_date) || "no study date")}</span>`
+    + `<span class="muted" title="${esc(st.description)}">${esc(st.collection)}</span>`
+    + `<span class="chip ${esc(st.status)}">${esc(STATUS_LABEL[st.status] || st.status)}</span>`
+    + (st.priority && st.priority !== "routine" ? `<span class="chip ${esc(st.priority)}">${esc(st.priority)}</span>` : "");
+  document.title = `${st.patient_id} — NeuroMPR PACS`;
+}
+function renderStudyPanel(st){
+  const body = document.getElementById("studyBody");
+  if (!st){ body.innerHTML = ""; return; }
+  let html = `<div class="subHead">Series</div>`;
+  st.series.forEach(s=>{
+    html += `<div class="studyRow"><span class="k">${esc(s.key)}</span><span style="flex:1;margin-left:6px;">${esc(s.description)}</span><span class="d">${esc(s.dims)}</span></div>`;
+  });
+  html += `<div class="subHead">Priors (${st.priors_list.length})</div>`;
+  if (!st.priors_list.length) html += `<div class="empty" style="padding:2px;">No other studies for this patient.</div>`;
+  st.priors_list.forEach(p=>{
+    html += `<div class="priorItem" data-pk="${p.pk}" title="Open this study"><span>${esc(fmtDate(p.study_date) || (p.timepoint ? "timepoint " + p.timepoint : "study"))} · ${esc(p.collection)}</span>`
+         + `<span class="chip ${esc(p.status)}">${esc(STATUS_LABEL[p.status] || p.status)}</span></div>`;
+  });
+  html += `<div class="subHead">Reports</div><div class="studyRow"><span>${st.reports.length ? `v${st.reports[0].version} · ${esc(st.reports[0].status)}` : "none yet"}</span>`
+       + `<span class="d">${esc(st.source)}</span></div>`;
+  body.innerHTML = html;
+  body.querySelectorAll(".priorItem").forEach(el=> el.onclick = ()=> openStudy(Number(el.dataset.pk)));
+}
+function applyRoleUI(){
+  const ro = !canEdit();
+  ["autoSegBtn","modelSegBtn"].forEach(id=>{ const b = document.getElementById(id); b.disabled = ro; b.title = ro ? "Your role is read-only" : ""; });
+  const u = ST.user;
+  document.getElementById("userChip").textContent = u ? `${u.full_name || u.username} · ${u.role}` : "";
+}
+
+function applyLoadedCase(j){
+  stopAllCine();
+  ST.caseInfo = j;
+  ST.measurements = Array.isArray(j.annotations) ? j.annotations : [];
+  document.getElementById("annState").textContent = ST.measurements.length ? `${ST.measurements.length} saved` : "";
+  ST.cursor = {i: Math.floor(j.shape[0]/2), j: Math.floor(j.shape[1]/2), k: Math.floor(j.shape[2]/2)};
+  const modSel = document.getElementById("modSel");
+  const mod3d = document.getElementById("mod3d");
+  modSel.innerHTML = ""; mod3d.innerHTML = "";
+  j.modalities.forEach(m=>{
+    modSel.innerHTML += `<option value="${m}">${m.toUpperCase()}</option>`;
+    mod3d.innerHTML += `<option value="${m}">${m.toUpperCase()}</option>`;
+  });
+  ST.modality = j.modalities[0];
+  const dw = j.default_windows[ST.modality];
+  ST.wc = dw.wc; ST.ww = dw.ww;
+  ST.showRestored = false;
+  document.getElementById("restoreToggle").classList.remove("on");
+  document.getElementById("caseLabel").textContent = `${j.shape.join("×")} · ${j.zooms.map(z=>z.toFixed(2)).join("×")} mm`;
+  renderBanner(j.study);
+  renderStudyPanel(j.study);
+  applyRoleUI();
+  document.getElementById("gtSegBtn").style.display = j.has_ground_truth ? "flex" : "none";
+  PLANES.forEach(p=>{ resetView(p); refreshPlane(p); });
+  updateStatsPanel(j.tumor_stats, j.seg_source);
+  renderMeasList();
+  ST.lastPlot3d = false;
+  clearNiivue();
+  clearPanorama();
+  ST3.crop = {lo:[0,0,0], hi:[1,1,1]}; syncCropUI();
+  document.getElementById("status3d").textContent = "";
+  document.getElementById("empty-3d").style.display = "flex";
+  toast(`${j.study.patient_id}: ${j.modalities.map(m=>m.toUpperCase()).join(", ")}${j.has_seg ? " · segmentation: " + (j.seg_source === "ground_truth" ? "dataset ground truth" : j.seg_source) : ""}`);
+}
+document.getElementById("modSel").addEventListener("change", e=>{
+  ST.modality = e.target.value;
+  const dw = ST.caseInfo.default_windows[ST.modality];
+  ST.wc = dw.wc; ST.ww = dw.ww;
+  refreshAllPlanes();
+});
+
+/* ============================== SEGMENTATION ============================== */
+document.getElementById("gtSegBtn").onclick = ()=>runSegmentation("ground_truth");
+document.getElementById("autoSegBtn").onclick = ()=>runSegmentation("auto");
+document.getElementById("modelSegBtn").onclick = ()=>runSegmentation("model");
+async function runSegmentation(method){
+  if (!ST.caseInfo){ toast("Load a case first."); return; }
+  const labels = {ground_truth:"Loading dataset ground-truth segmentation…", model:"Running model segmentation…", auto:"Running auto-threshold segmentation…"};
+  toast(labels[method] || "Running segmentation…", 6000);
+  try{
+    const res = await fetch("/api/segment", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({case_id: ST.caseInfo.case_id, method})});
+    const j = await res.json();
+    if (j.error){ toast("Segmentation failed: "+j.error); return; }
+    ST.caseInfo.has_seg = true;
+    ST.caseInfo.seg_source = j.method;
+    ST.caseInfo.tumor_stats = j.tumor_stats;   // carries centroid / bbox for the 3D focus + crop tools
+    if (ST.lastPlot3d) document.getElementById("status3d").textContent = "Segmentation changed — click Render 3D to update.";
+    updateStatsPanel(j.tumor_stats, j.method);
+    ST.overlay = true;
+    document.getElementById("overlayToggle").classList.add("on");
+    refreshAllPlanes();
+    toast(`Segmentation active: ${j.method}. Total tumor volume: ${j.tumor_stats.total_volume_ml} mL.`);
+  } catch(e){ toast("Segmentation error: "+e); }
+}
+function updateStatsPanel(stats, methodLabel){
+  const body = document.getElementById("statsBody");
+  if (!stats || !stats.total_voxels){
+    const gtHint = ST.caseInfo && ST.caseInfo.has_ground_truth
+      ? `This case has a ground-truth segmentation — click <b>Ground truth</b> to use it as-is, `
+      : "";
+    body.innerHTML = `<div class="empty">${gtHint}or run Auto-segment / Model segment to compute tumor volume and per-region breakdown.</div>`;
+    return;
+  }
+  let html = `<div class="statCard"><div class="t">Total tumor volume</div><div class="v">${stats.total_volume_ml} mL</div>
+    <div class="s">${stats.total_voxels} voxels${methodLabel? " · "+methodLabel : ""}</div></div>`;
+  Object.values(stats.labels).forEach(l=>{
+    html += `<div class="statCard"><div class="t">${l.name}</div><div class="v">${l.volume_ml} mL</div>
+      <div class="s">${l.voxels} vox · max extent ${l.bbox_diag_mm} mm</div></div>`;
+  });
+  body.innerHTML = html;
+}
+document.getElementById("overlayToggle").onclick = function(){
+  ST.overlay = !ST.overlay;
+  this.classList.toggle("on", ST.overlay);
+  refreshAllPlanes();
+};
+document.getElementById("opacityRange").addEventListener("input", e=>{
+  ST.opacity = parseInt(e.target.value)/100;
+  clearTimeout(refreshPlane._ot);
+  refreshPlane._ot = setTimeout(()=>refreshAllPlanes(), 60);
+});
+document.getElementById("restoreToggle").onclick = async function(){
+  if (!ST.caseInfo) return;
+  if (!ST.caseInfo.has_seg){ toast("Run segmentation first — brain restoration needs a tumor mask."); return; }
+  ST.showRestored = !ST.showRestored;
+  this.classList.toggle("on", ST.showRestored);
+  if (ST.showRestored){
+    toast("Computing inpainted (tumor-removed) images…", 4000);
+    await fetch("/api/restore", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({case_id: ST.caseInfo.case_id, modality: ST.modality})});
+  }
+  refreshAllPlanes();
+};
+
+/* ============================== 3D VIEW (niivue) ============================== */
+let nv = null;
+const $ = id => document.getElementById(id);
+
+const ST3 = {
+  mode: null,            // full | isolate | restored (what's currently loaded)
+  modality: null,
+  brainIdx: -1,          // index of the brain volume in nv.volumes (-1 in isolate mode)
+  maskIdx: -1,           // index of the tumor mask in nv.volumes (-1 when not loaded)
+  layout: "render",      // render | lightbox | mpr
+  zoom: 1,
+  link: true, xhair: false, cube: true,
+  cmap: "gray", shading: 0.5, edge: 0, bg: "dark",
+  shadeTouchedInFs: false,
+  tumorMode: "uniform", tumorVis: {1:true, 2:true, 4:true, 5:true}, tumorOpacity: 0.6,
+  quality: "auto", qualityEff: "high", dragLow: true, measured: false,
+  clip: {on:false, depth:0, azi:90, elev:0, thick:2},
+  crop: {lo:[0,0,0], hi:[1,1,1]},
+  orbit: {on:false, raf:0, last:0, az:0, baseAz:0, phase:0},
+  orbitElev: 10,
+  panorama: null,        // {dataUrl, title}
+  recording: false,
+  lastSyncedVox: null, syncPending: false,
+};
+const BG3D = { dark:[0.031,0.035,0.047,1], black:[0,0,0,1], white:[1,1,1,1] };
+const BG3D_CSS = { dark:"#08090c", black:"#000000", white:"#ffffff" };
+const TUMOR_RED = [255,59,59];
+// common BraTS display convention: necrotic core red, edema green, enhancing yellow
+const REGION_COLORS = {1:[255,59,59], 2:[80,220,110], 4:[255,214,10], 5:[60,140,255]};
+// Camera presets as niivue [azimuth, elevation] = the side of the head facing
+// the viewer (matches niivue's orientation cube). Verified on a BraTS-oriented
+// volume (affine diag(-1,-1,1)) with a lesion in the right frontal lobe --
+// niivue reorients to RAS on load, so these are anatomical, not voxel-order.
+const VIEW_PRESETS = { A:[180,0], P:[0,0], L:[90,0], R:[270,0], S:[0,90], I:[0,-90] };
+const VIEW_NAMES = { A:"Anterior", P:"Posterior", L:"Left", R:"Right", S:"Superior", I:"Inferior" };
+const PREFERRED_CMAPS = ["gray","bone","hot","winter","cool","warm","plasma","viridis","inferno","magma","copper","blue2red"];
+
+function has3D(){ return !!(nv && nv.volumes && nv.volumes.length); }
+function need3D(){ if (has3D()) return true; toast("Render 3D first."); return false; }
+function isFullscreen3D(){ return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+function norm360(a){ return ((a % 360) + 360) % 360; }
+
+/* niivue works in its own RAS-reoriented voxel space (vox2frac / frac2vox /
+   onLocationChange.vox), while ST.cursor and the server's tumor stats use the
+   file's native voxel order -- for BraTS (affine diag(-1,-1,1)) those differ by
+   an L/R + A/P flip. World millimetres are the common ground: native voxel ->
+   mm through the case affine, mm -> niivue fraction through niivue itself. */
+function nativeVoxToMM(v){
+  const A = ST.caseInfo.affine;
+  return [0,1,2].map(r=> A[r][0]*v[0] + A[r][1]*v[1] + A[r][2]*v[2] + A[r][3]);
+}
+function affineInverse(){
+  if (ST.caseInfo._affInv) return ST.caseInfo._affInv;
+  const A = ST.caseInfo.affine;
+  const [a,b,c] = A[0], [d,e,f] = A[1], [g,h,i] = A[2];
+  const det = a*(e*i-f*h) - b*(d*i-f*g) + c*(d*h-e*g);
+  const R = [[(e*i-f*h)/det, (c*h-b*i)/det, (b*f-c*e)/det],
+             [(f*g-d*i)/det, (a*i-c*g)/det, (c*d-a*f)/det],
+             [(d*h-e*g)/det, (b*g-a*h)/det, (a*e-b*d)/det]];
+  const t = [A[0][3], A[1][3], A[2][3]];
+  ST.caseInfo._affInv = R.map(row=> [...row, -(row[0]*t[0] + row[1]*t[1] + row[2]*t[2])]);
+  return ST.caseInfo._affInv;
+}
+function mmToNativeVox(mm){
+  const M = affineInverse();
+  return [0,1,2].map(r=> M[r][0]*mm[0] + M[r][1]*mm[1] + M[r][2]*mm[2] + M[r][3]);
+}
+function nativeVoxToFrac(v){ return nv.mm2frac(nativeVoxToMM(v), 0, true); }
+
+function ensureNiivue(){
+  if (nv) return nv;
+  nv = new Niivue({
+    backColor: BG3D[ST3.bg],
+    isResizeCanvas: true,
+    isOrientCube: ST3.cube,
+    show3Dcrosshair: ST3.xhair,
+    isRadiologicalConvention: true,   // niivue's own slice tiles (MPR / lightbox) match the 2D panes: patient right on screen left
+  });
+  nv.attachToCanvas($("niivueCanvas"));
+  nv.setSliceType(SLICE_TYPE.RENDER);
+  nv.setMeshThicknessOn2D(0);       // atlas head meshes appear in 3D only, never over real MRI slices
+  nv.onAzimuthElevationChange = ()=> updateMeta3d();
+  nv.onLocationChange = onNiivueLocation;
+  nv.onClipPlaneChange = syncClipFromScene;
+  populateColormaps();
+  window.NeuroMPR3D = { nv, ST3, grab: grab3DCanvas };   // handy from the browser console (F12) when debugging
+  return nv;
+}
+function clearNiivue(){
+  stopOrbit();
+  removeHeadMeshes();
+  ["skull","scalp"].forEach(k=>{ if (HM.parts[k]) HM.parts[k].frac = null; });   // volume grid may change (Fast = half resolution)
+  if (nv){
+    try{ nv.volumes.slice().forEach(v => nv.removeVolume(v)); }catch(e){}
+  }
+  ST3.brainIdx = -1; ST3.maskIdx = -1; ST3.mode = null;
+  ST3.lastSyncedVox = null;
+  updateMeta3d();
+  updateTumorSection();
+}
+function populateColormaps(){
+  const sel = $("cmap3d");
+  let avail = [];
+  try{ avail = nv.colormaps(); }catch(e){ avail = ["gray"]; }
+  const list = PREFERRED_CMAPS.filter(c => avail.includes(c));
+  sel.innerHTML = list.map(c => `<option value="${c}">${c}</option>`).join("");
+  sel.value = ST3.cmap;
+}
+
+/* ---------- render (load volumes) ---------- */
+$("render3dBtn").onclick = render3D;
+$("opacity3dRange").addEventListener("input", e=>{
+  if (!has3D()) return;
+  const v = parseInt(e.target.value, 10)/100;
+  try{
+    if (ST3.brainIdx >= 0) nv.setOpacity(ST3.brainIdx, v);
+    else if (ST3.maskIdx >= 0){ ST3.tumorOpacity = Math.max(0.05, v); syncTumorOpacityUI(); nv.setOpacity(ST3.maskIdx, ST3.tumorOpacity); }
+  }catch(err){}
+});
+async function render3D(){
+  if (!ST.caseInfo){ toast("Load a case first."); return; }
+  const mode = $("mode3d").value;
+  const modality = $("mod3d").value;
+  if ((mode==="isolate" || mode==="restored") && !ST.caseInfo.has_seg){
+    toast("Run segmentation first — this 3D mode needs a tumor mask.");
+    return;
+  }
+  const statusEl = $("status3d");
+  const btn = $("render3dBtn");
+  statusEl.textContent = "Loading volume…";
+  btn.disabled = true;
+  try{
+    const inst = ensureNiivue();
+    clearNiivue();
+    const cacheBust = Date.now();
+    const opacityPct = $("opacity3dRange").value;
+    // "Fast" quality streams a half-resolution 3D volume (half the ray-march steps per pixel);
+    // the 2D views always use the full-resolution data
+    const ds = ST3.qualityEff === "fast" ? "&ds=2" : "";
+    ST3.loadedDs = ds ? 2 : 1;
+    const maskUrl = `/api/nifti_mask/mask.nii?case_id=${ST.caseInfo.case_id}${ds}&_=${cacheBust}`;
+    let volumeList;
+
+    if (mode === "isolate"){
+      // just the tumor mask, on its own — no brain background
+      volumeList = [{ url: maskUrl, name: "mask.nii", colormap: "red", opacity: ST3.tumorOpacity, cal_min: 0.5, cal_max: 4 }];
+    } else {
+      volumeList = [{
+        url: `/api/nifti_volume/volume.nii?case_id=${ST.caseInfo.case_id}&modality=${modality}&mode=${mode}${ds}&_=${cacheBust}`,
+        name: "volume.nii", colormap: ST3.cmap, opacity: opacityPct/100,
+      }];
+      if (mode === "full" && ST.caseInfo.has_seg){
+        volumeList.push({ url: maskUrl, name: "mask.nii", colormap: "red", opacity: ST3.tumorOpacity, cal_min: 0.5, cal_max: 4 });
+      }
+    }
+
+    await inst.loadVolumes(volumeList);
+    ST3.mode = mode; ST3.modality = modality;
+    ST3.brainIdx = mode === "isolate" ? -1 : 0;
+    ST3.maskIdx  = mode === "isolate" ? 0 : (volumeList.length > 1 ? 1 : -1);
+    await apply3DAll();
+    $("empty-3d").style.display = "none";
+    ST.lastPlot3d = true;
+    statusEl.textContent = "Ready.";
+    if (HM.state === "idle" || HM.state === "") pollHeadModel();     // starts fitting the head model in the background
+    else await syncHeadMeshes();
+    if (ST3.quality === "auto" && !ST3.measured) autoQuality();
+  } catch(e){
+    toast("3D render error: "+e);
+    statusEl.textContent = "error";
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/* re-apply every user setting after (re)loading volumes */
+async function apply3DAll(){
+  if (!has3D()) return;
+  nv.opts.backColor = BG3D[ST3.bg];
+  nv.opts.isOrientCube = ST3.cube;
+  nv.opts.show3Dcrosshair = ST3.xhair;
+  $("niivueCanvas").style.background = BG3D_CSS[ST3.bg];
+  if (ST3.brainIdx >= 0) nv.setColormap(nv.volumes[ST3.brainIdx].id, ST3.cmap);
+  applyTumorLut();
+  if (ST3.maskIdx >= 0) nv.setOpacity(ST3.maskIdx, ST3.tumorOpacity);
+  await applyShading();
+  applyClip();
+  applyCrop();
+  nv.scene.volScaleMultiplier = ST3.zoom;
+  applyQuality();
+  applyLayout();
+  updateTumorSection();
+  sync3DCrosshairFromCursor(true);
+  updateMeta3d();
+}
+
+/* ---------- tumor: color table (uniform red or per sub-region) + per-region visibility ---------- */
+function applyTumorLut(){
+  if (!has3D() || ST3.maskIdx < 0) return;
+  const colors = ST3.tumorMode === "regions" ? REGION_COLORS : {1:TUMOR_RED, 2:TUMOR_RED, 4:TUMOR_RED, 5:REGION_COLORS[5]};
+  const I = [0,1,2,3,4,5], R = [], G = [], B = [], A = [];
+  I.forEach(l=>{
+    const c = colors[l] || [0,0,0];
+    R.push(c[0]); G.push(c[1]); B.push(c[2]);
+    A.push(colors[l] && ST3.tumorVis[l] ? 255 : 0);   // label 0 (background) and unused label 3 stay transparent
+  });
+  nv.volumes[ST3.maskIdx].setColormapLabel({R, G, B, A, I, labels:["", "NCR/NET", "ED", "", "ET", "RC"]});
+  nv.updateGLVolume();
+}
+function updateTumorSection(){
+  const sec = $("tumorSec3d");
+  sec.classList.toggle("disabled", has3D() && ST3.maskIdx < 0);
+  const colors = ST3.tumorMode === "regions" ? REGION_COLORS : {1:TUMOR_RED, 2:TUMOR_RED, 4:TUMOR_RED, 5:REGION_COLORS[5]};
+  const ts = ST.caseInfo && ST.caseInfo.tumor_stats;
+  document.getElementById("rcRow").style.display = (ts && ts.labels && ts.labels["5"]) ? "flex" : "none";
+  document.querySelectorAll(".swatch[data-sw]").forEach(sw=>{
+    const c = colors[sw.dataset.sw]; sw.style.background = `rgb(${c[0]},${c[1]},${c[2]})`;
+  });
+}
+function syncTumorOpacityUI(){
+  $("tumorOp3d").value = Math.round(ST3.tumorOpacity*100);
+  $("tumorOp3dVal").textContent = Math.round(ST3.tumorOpacity*100)+"%";
+}
+$("tumorMode3d").onchange = e=>{ ST3.tumorMode = e.target.value; updateTumorSection(); applyTumorLut(); };
+document.querySelectorAll(".tumorVis").forEach(cb=>{
+  cb.onchange = ()=>{ ST3.tumorVis[cb.dataset.label] = cb.checked; applyTumorLut(); };
+});
+$("tumorOp3d").addEventListener("input", e=>{
+  ST3.tumorOpacity = parseInt(e.target.value,10)/100; syncTumorOpacityUI();
+  if (has3D() && ST3.maskIdx >= 0) nv.setOpacity(ST3.maskIdx, ST3.tumorOpacity);
+});
+
+/* ---------- brain appearance ---------- */
+async function applyShading(){
+  if (!has3D()) return;
+  // fullscreen drops shading to 0 for speed (see fullscreen handler) unless the
+  // user explicitly moves the shading slider while in fullscreen
+  const amt = (isFullscreen3D() && !ST3.shadeTouchedInFs) ? 0 : ST3.shading;
+  try{ await nv.setVolumeRenderIllumination(amt); }catch(e){}
+  try{ await nv.setGradientOpacity(ST3.edge, 0); }catch(e){}
+  nv.drawScene();
+}
+$("cmap3d").onchange = e=>{
+  ST3.cmap = e.target.value;
+  if (has3D() && ST3.brainIdx >= 0) nv.setColormap(nv.volumes[ST3.brainIdx].id, ST3.cmap);
+};
+$("shade3d").addEventListener("input", e=>{
+  ST3.shading = parseInt(e.target.value,10)/100;
+  $("shade3dVal").textContent = ST3.shading.toFixed(2);
+  if (isFullscreen3D()) ST3.shadeTouchedInFs = true;
+  clearTimeout(applyShading._t); applyShading._t = setTimeout(applyShading, 60);
+});
+$("edge3d").addEventListener("input", e=>{
+  ST3.edge = parseInt(e.target.value,10)/100;
+  $("edge3dVal").textContent = ST3.edge.toFixed(2);
+  clearTimeout(applyShading._t); applyShading._t = setTimeout(applyShading, 60);
+});
+$("bg3d").onchange = e=>{
+  ST3.bg = e.target.value;
+  $("niivueCanvas").style.background = BG3D_CSS[ST3.bg];
+  if (!nv) return;
+  nv.opts.backColor = BG3D[ST3.bg];
+  nv.drawScene();
+};
+
+/* ---------- cut-away clip plane ---------- */
+function applyClip(){
+  if (!has3D()) return;
+  const c = ST3.clip;
+  nv.setClipPlaneColor([0.22, 0.85, 1.0, 0.06]);   // faint cyan instead of niivue's default 50% magenta
+  // without this niivue keeps drawing overlay (tumor) voxels that sit in front of
+  // the cut; with it the tumor is cut away exactly like the brain is
+  nv.backgroundMasksOverlays = c.on ? 1 : 0;
+  nv.setClipPlane(c.on ? [c.depth, c.azi, c.elev] : [2, c.azi, c.elev]);   // depth 2 == no clipping
+  nv.setClipPlaneThick(c.on ? c.thick : 2);
+  updateMeta3d();
+  scheduleHeadClip();
+}
+function syncClipUI(){
+  const c = ST3.clip;
+  $("clipOn").checked = c.on;
+  $("clipDepth").value = Math.round(Math.max(-1, Math.min(1, c.depth))*100);
+  $("clipDepthVal").textContent = c.depth.toFixed(2);
+  $("clipAzi").value = Math.round(norm360(c.azi));  $("clipAziVal").textContent = Math.round(norm360(c.azi))+"°";
+  $("clipElev").value = Math.round(Math.max(-90, Math.min(90, c.elev))); $("clipElevVal").textContent = Math.round(c.elev)+"°";
+  $("clipThick").value = Math.round(c.thick*100);
+  $("clipThickVal").textContent = c.thick >= 2 ? "off" : c.thick.toFixed(2);
+}
+function syncClipFromScene(){
+  // niivue moves the plane itself on mouse-wheel (depth) and right-drag (angle) -- mirror that in the sliders
+  if (!nv || !ST3.clip.on) return;
+  const d = nv.scene.clipPlaneDepthAziElev;
+  if (!d || d[0] >= 1.8) return;
+  ST3.clip.depth = d[0]; ST3.clip.azi = norm360(d[1]); ST3.clip.elev = d[2];
+  syncClipUI();
+  scheduleHeadClip();
+}
+function aimClipAtCamera(){
+  // plane facing the viewer, removing the half of the brain nearest to the camera
+  if (!has3D()) return;
+  ST3.clip.azi = norm360(nv.scene.renderAzimuth + 180);
+  ST3.clip.elev = nv.scene.renderElevation;
+}
+$("clipOn").onchange = e=>{
+  ST3.clip.on = e.target.checked;
+  if (ST3.clip.on && !ST3.clip.aimed){ aimClipAtCamera(); ST3.clip.aimed = true; }
+  applyClip(); syncClipUI();
+};
+$("clipAimBtn").onclick = ()=>{
+  if (!need3D()) return;
+  aimClipAtCamera(); ST3.clip.on = true; ST3.clip.aimed = true;
+  applyClip(); syncClipUI();
+};
+[["clipDepth", v=>ST3.clip.depth = v/100], ["clipAzi", v=>ST3.clip.azi = v], ["clipElev", v=>ST3.clip.elev = v],
+ ["clipThick", v=>ST3.clip.thick = v/100]].forEach(([id, set])=>{
+  $(id).addEventListener("input", e=>{
+    set(parseInt(e.target.value,10));
+    if (!ST3.clip.on && id !== "clipThick"){ ST3.clip.on = true; }   // moving a cut slider switches the cut on
+    syncClipUI(); applyClip();
+  });
+});
+
+/* ---------- axis-aligned box crop (niivue clip volume, RAS fractions 0..1) ---------- */
+const CROP_IDS = [["cropX0",0,"lo"],["cropX1",0,"hi"],["cropY0",1,"lo"],["cropY1",1,"hi"],["cropZ0",2,"lo"],["cropZ1",2,"hi"]];
+function applyCrop(){
+  if (!has3D()) return;
+  nv.setClipVolume(ST3.crop.lo, ST3.crop.hi);
+  updateMeta3d();
+  scheduleHeadClip();
+}
+function syncCropUI(){
+  CROP_IDS.forEach(([id, ax, end])=>{
+    const v = Math.round(ST3.crop[end][ax]*100);
+    $(id).value = v; $(id+"Val").textContent = v+"%";
+  });
+}
+CROP_IDS.forEach(([id, ax, end])=>{
+  $(id).addEventListener("input", e=>{
+    ST3.crop[end][ax] = parseInt(e.target.value,10)/100;
+    // keep lo <= hi by pushing the other handle along
+    if (ST3.crop.lo[ax] > ST3.crop.hi[ax]){
+      if (end === "lo") ST3.crop.hi[ax] = ST3.crop.lo[ax]; else ST3.crop.lo[ax] = ST3.crop.hi[ax];
+    }
+    syncCropUI(); applyCrop();
+  });
+});
+$("cropResetBtn").onclick = ()=>{ ST3.crop = {lo:[0,0,0], hi:[1,1,1]}; syncCropUI(); applyCrop(); };
+$("cropTumorBtn").onclick = ()=>{
+  if (!need3D()) return;
+  const ts = ST.caseInfo && ST.caseInfo.tumor_stats;
+  if (!ts || !ts.bbox_min_vox){ toast("No tumor segmentation yet — run segmentation first."); return; }
+  const a = ts.bbox_min_vox, b = ts.bbox_max_vox;
+  const lo = [1,1,1], hi = [0,0,0];
+  for (const x of [a[0]-0.5, b[0]+0.5]) for (const y of [a[1]-0.5, b[1]+0.5]) for (const z of [a[2]-0.5, b[2]+0.5]){
+    const f = nativeVoxToFrac([x, y, z]);
+    for (let n=0; n<3; n++){ lo[n] = Math.min(lo[n], f[n]); hi[n] = Math.max(hi[n], f[n]); }
+  }
+  const m = 0.03;   // small margin of surrounding brain
+  ST3.crop = { lo: lo.map(v=>Math.max(0, v-m)), hi: hi.map(v=>Math.min(1, v+m)) };
+  syncCropUI(); applyCrop();
+  toast("Cropped the 3D view to the tumor's bounding box (+3% margin).");
+};
+
+/* ---------- layouts ---------- */
+function buildLightboxString(){
+  // 12 axial slices (3 rows x 4) spanning the tumor (+margin), or the central 70% of the brain
+  const n = 12, cols = 4;
+  let zLo, zHi;
+  const ts = ST.caseInfo && ST.caseInfo.tumor_stats;
+  if (ts && ts.bbox_min_vox){
+    const a = ts.bbox_min_vox, b = ts.bbox_max_vox, zs = [];
+    for (const x of [a[0], b[0]]) for (const y of [a[1], b[1]]) for (const z of [a[2], b[2]]) zs.push(nativeVoxToMM([x,y,z])[2]);
+    zLo = Math.min(...zs) - 4; zHi = Math.max(...zs) + 4;
+  } else {
+    zLo = nv.frac2mm([0.5,0.5,0.15])[2]; zHi = nv.frac2mm([0.5,0.5,0.85])[2];
+  }
+  // niivue 0.57's mosaic parser starts every new row (";") one tile-width to the
+  // right. "H 1" (100% horizontal overlap) zeroes that advance for the row break
+  // and the row's first tile; "H 0" restores normal spacing for the rest.
+  const items = [];
+  for (let i=0; i<n; i++){
+    items.push((zLo + (zHi-zLo)*i/(n-1)).toFixed(1));
+    if (i % cols === 0 && i > 0) items.push("H 0");
+    if ((i+1) % cols === 0 && i < n-1) items.push("H 1 ;");
+  }
+  return "A L " + items.join(" ");
+}
+function applyLayout(){
+  if (!has3D()) return;
+  const L = ST3.layout;
+  if (L === "render"){
+    nv.setSliceMosaicString("");
+    nv.setSliceType(SLICE_TYPE.RENDER);
+  } else if (L === "mpr"){
+    nv.setSliceMosaicString("");
+    nv.opts.multiplanarShowRender = SHOW_RENDER.ALWAYS;
+    nv.setMultiplanarLayout(MULTIPLANAR_TYPE.GRID);
+    nv.setSliceType(SLICE_TYPE.MULTIPLANAR);
+  } else if (L === "lightbox"){
+    nv.setSliceType(SLICE_TYPE.AXIAL);
+    nv.setSliceMosaicString(buildLightboxString());
+  }
+  if (L !== "render" && L !== "mpr") stopOrbit();
+  updateMeta3d();
+}
+function setLayout(L){
+  ST3.layout = L; $("layout3d").value = L;
+  applyLayout();
+}
+$("layout3d").onchange = e=> setLayout(e.target.value);
+function ensureRenderLayout(){
+  if (ST3.layout !== "render" && ST3.layout !== "mpr") setLayout("render");
+}
+
+
+
+$("zoom3d").addEventListener("input", e=>{
+  ST3.zoom = parseInt(e.target.value,10)/100;
+  $("zoom3dVal").textContent = ST3.zoom.toFixed(2)+"×";
+  if (has3D()) nv.setScale(ST3.zoom);
+});
+$("niivueCanvas").addEventListener("wheel", ()=> setTimeout(()=>{
+  // niivue zooms (or pushes the cut plane) on wheel itself -- mirror the zoom into the slider
+  if (!nv) return;
+  ST3.zoom = nv.scene.volScaleMultiplier;
+  $("zoom3d").value = Math.round(ST3.zoom*100); $("zoom3dVal").textContent = ST3.zoom.toFixed(2)+"×";
+}, 0), {passive:true});
+$("cube3d").onchange = e=>{ ST3.cube = e.target.checked; if (nv){ nv.opts.isOrientCube = ST3.cube; nv.drawScene(); } };
+$("xhair3d").onchange = e=>{ ST3.xhair = e.target.checked; if (nv){ nv.opts.show3Dcrosshair = ST3.xhair; sync3DCrosshairFromCursor(true); nv.drawScene(); } };
+$("link3d").onchange = e=>{ ST3.link = e.target.checked; if (ST3.link) sync3DCrosshairFromCursor(true); };
+
+/* ---------- 2D <-> 3D crosshair link ---------- */
+function schedule3DSync(){
+  if (ST3.syncPending) return;
+  ST3.syncPending = true;
+  requestAnimationFrame(()=>{ ST3.syncPending = false; sync3DCrosshairFromCursor(false); });
+}
+function sync3DCrosshairFromCursor(force){
+  if (!has3D() || !ST3.link || !ST.caseInfo) return;
+  const v = [ST.cursor.i, ST.cursor.j, ST.cursor.k];
+  if (!force && ST3.lastSyncedVox && v.every((x, n)=> x === ST3.lastSyncedVox[n])) return;
+  ST3.lastSyncedVox = v;
+  try{
+    nv.scene.crosshairPos = nativeVoxToFrac(v);
+    // a plain 3D render without a visible crosshair looks identical wherever the
+    // crosshair is -- skip the (expensive) redraw in that case
+    if (ST3.layout !== "render" || ST3.xhair) nv.drawScene();
+  }catch(e){}
+}
+function onNiivueLocation(data){
+  // fired by niivue when its crosshair moves: a double-click on the 3D surface (depth pick),
+  // or a click in one of its own slice tiles (MPR / lightbox layouts)
+  if (!ST3.link || !ST.caseInfo || !data || !data.mm) return;
+  const nvx = mmToNativeVox(data.mm);   // data.vox is niivue's RAS voxel, not the file's -- go through mm
+  const v = [clampI(nvx[0]), clampJ(nvx[1]), clampK(nvx[2])];
+  if (ST3.lastSyncedVox && v.every((x, n)=> x === ST3.lastSyncedVox[n])) return;
+  ST3.lastSyncedVox = v;
+  ST.cursor = {i:v[0], j:v[1], k:v[2]};
+  refreshAllPlanes();
+  PLANES.forEach(drawOverlay);   // not redrawAllOverlays(): no need to echo back into 3D
+}
+
+/* ---------- camera: presets, face tumor, meta readout ---------- */
+function setView(key){
+  if (!need3D()) return;
+  stopOrbit();
+  if (key === "T"){ focusTumor(); return; }
+  ensureRenderLayout();
+  const [az, el] = VIEW_PRESETS[key];
+  nv.setRenderAzimuthElevation(az, el);
+}
+document.querySelectorAll("#bar3d [data-view]").forEach(b=> b.onclick = ()=> setView(b.dataset.view));
+
+function azElFacing(dirRAS){
+  // camera angles that look at the brain from direction dirRAS (x=R, y=A, z=S), derived from the presets
+  const [dx, dy, dz] = dirRAS;
+  const azR = VIEW_PRESETS.R[0], azA = VIEW_PRESETS.A[0];
+  const sgn = norm360(azA - azR) === 90 ? 1 : -1;
+  const az = norm360(azR + sgn * Math.atan2(dy, dx) * 180/Math.PI);
+  const el = Math.atan2(dz, Math.hypot(dx, dy)) * 180/Math.PI;
+  return [az, Math.max(-80, Math.min(80, el))];
+}
+function focusTumor(){
+  const ts = ST.caseInfo && ST.caseInfo.tumor_stats;
+  if (!ts || !ts.centroid_vox){ toast("No tumor segmentation yet — run segmentation first."); return; }
+  const c = ts.centroid_vox.map(Math.round);
+  // 2D: jump all planes to the tumor centroid
+  ST.cursor = {i:clampI(c[0]), j:clampJ(c[1]), k:clampK(c[2])};
+  refreshAllPlanes(); redrawAllOverlays();
+  // 3D: turn the camera to look at the tumor from outside the brain
+  if (has3D()){
+    ensureRenderLayout();
+    const mmT = nativeVoxToMM(ts.centroid_vox), mm0 = nv.frac2mm([0.5,0.5,0.5], 0, true);
+    const [az, el] = azElFacing([mmT[0]-mm0[0], mmT[1]-mm0[1], mmT[2]-mm0[2]]);
+    nv.setRenderAzimuthElevation(az, el);
+  }
+}
+function nearestViewName(az, el){
+  for (const [k, [a, e]] of Object.entries(VIEW_PRESETS)){
+    if (Math.abs(e) === 90) { if (Math.abs(el - e) < 12) return VIEW_NAMES[k]; continue; }
+    const d = Math.abs(((az - a + 540) % 360) - 180);
+    if (d < 12 && Math.abs(el - e) < 25) return VIEW_NAMES[k];
+  }
+  return null;
+}
+function updateMeta3d(){
+  const el = $("meta3d");
+  if (!has3D()){ el.textContent = ""; return; }
+  const bits = [];
+  if (ST3.layout === "render" || ST3.layout === "mpr"){
+    const az = Math.round(norm360(nv.scene.renderAzimuth)), e = Math.round(nv.scene.renderElevation);
+    const name = nearestViewName(az, e);
+    bits.push(`AZ ${az}° · EL ${e}°${name ? " · "+name.toUpperCase() : ""}`);
+    if (!ST3.orbit.on && document.activeElement !== $("orbitElev")){
+      $("orbitElev").value = Math.max(-60, Math.min(60, e)); $("orbitElevVal").textContent = e+"°";
+    }
+  } else {
+    bits.push("AXIAL LIGHTBOX");
+  }
+  if (ST3.clip.on) bits.push("CUT");
+  if (ST3.crop.lo.some(v=>v>0) || ST3.crop.hi.some(v=>v<1)) bits.push("CROP");
+  if (ST3.orbit.on) bits.push("ORBIT");
+  if (headVisible()) bits.push("HEAD: ATLAS");
+  el.textContent = bits.join(" · ");
+}
+
+/* ---------- panoramic orbit (turntable / rock) ---------- */
+function startOrbit(){
+  if (!need3D()) return;
+  ensureRenderLayout();
+  const o = ST3.orbit;
+  o.on = true; o.last = 0; o.phase = 0;
+  o.az = nv.scene.renderAzimuth; o.baseAz = o.az;
+  $("orbitBtn").textContent = "❚❚"; $("orbitBtn").classList.add("on");
+  setInteractiveQuality(true);
+  o.raf = requestAnimationFrame(orbitTick);
+  updateMeta3d();
+}
+function stopOrbit(){
+  const o = ST3.orbit;
+  if (o.raf) cancelAnimationFrame(o.raf);
+  o.raf = 0;
+  if (!o.on) return;
+  o.on = false;
+  $("orbitBtn").textContent = "▶"; $("orbitBtn").classList.remove("on");
+  setInteractiveQuality(false);
+  updateMeta3d();
+}
+function toggleOrbit(){ ST3.orbit.on ? stopOrbit() : startOrbit(); }
+function orbitTick(t){
+  const o = ST3.orbit;
+  if (!o.on) return;
+  if (!has3D()){ stopOrbit(); return; }
+  const dt = o.last ? Math.min(0.1, (t - o.last)/1000) : 0;
+  o.last = t;
+  const speed = parseInt($("orbitSpeed").value, 10);   // degrees per second
+  let az;
+  if ($("orbitMode").value === "rock"){
+    o.phase += (speed/40) * dt;                         // peak angular speed == speed
+    az = o.baseAz + 40*Math.sin(o.phase);
+  } else {
+    o.az = norm360(o.az + speed*dt);
+    az = o.az;
+  }
+  nv.setRenderAzimuthElevation(az, ST3.orbitElev);
+  o.raf = requestAnimationFrame(orbitTick);
+}
+$("orbitBtn").onclick = toggleOrbit;
+$("orbitMode").onchange = ()=>{ if (ST3.orbit.on && has3D()){ ST3.orbit.baseAz = nv.scene.renderAzimuth; ST3.orbit.phase = 0; } };
+$("orbitElev").addEventListener("input", e=>{
+  ST3.orbitElev = parseInt(e.target.value,10);
+  $("orbitElevVal").textContent = ST3.orbitElev+"°";
+  if (has3D() && !ST3.orbit.on) nv.setRenderAzimuthElevation(nv.scene.renderAzimuth, ST3.orbitElev);
+});
+// grabbing the volume with the mouse hands control back to the user
+$("niivueCanvas").addEventListener("pointerdown", ()=>{ if (ST3.orbit.on) stopOrbit(); });
+
+/* ---------- capture: frame grab, PNG snapshot, panorama strip, 360° clip ---------- */
+function grab3DCanvas(){
+  // A plain canvas.toDataURL() is unreliable for WebGL: the drawing buffer is
+  // cleared as soon as the browser composites a frame. Force a synchronous
+  // redraw and read the pixels straight out of the framebuffer in the same tick.
+  if (!has3D()) return null;
+  try{
+    nv.drawScene();
+    const gl = nv.gl || $("niivueCanvas").getContext("webgl2");
+    if (!gl) return null;
+    const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
+    if (!w || !h) return null;
+    const pixels = new Uint8Array(w*h*4);
+    gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+    // WebGL's origin is bottom-left; flip to a normal top-left image
+    const flipped = new Uint8ClampedArray(w*h*4), rowBytes = w*4;
+    for (let y=0; y<h; y++) flipped.set(pixels.subarray(y*rowBytes, (y+1)*rowBytes), (h-1-y)*rowBytes);
+    const off = document.createElement("canvas");
+    off.width = w; off.height = h;
+    const ctx = off.getContext("2d");
+    ctx.putImageData(new ImageData(flipped, w, h), 0, 0);
+    // the WebGL buffer may carry alpha < 1; flatten onto the panel background
+    const flat = document.createElement("canvas");
+    flat.width = w; flat.height = h;
+    const fctx = flat.getContext("2d");
+    fctx.fillStyle = BG3D_CSS[ST3.bg]; fctx.fillRect(0, 0, w, h);
+    fctx.drawImage(off, 0, 0);
+    return flat;
+  }catch(e){
+    console.warn("3D frame grab failed:", e);
+    return null;
+  }
+}
+function downloadBlob(blob, name){
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=> URL.revokeObjectURL(a.href), 4000);
+}
+function fileStem(){
+  const p = (ST.caseInfo && ST.caseInfo.path) || "case";
+  const m = p.match(/([A-Za-z0-9_\-]+)[\\\/]?$/);
+  return "neurompr_" + (m ? m[1] : "case").slice(0, 40);
+}
+$("snap3dBtn").onclick = ()=>{
+  if (!need3D()) return;
+  const c = grab3DCanvas();
+  if (!c){ toast("Snapshot failed — see console."); return; }
+  c.toBlob(b=> downloadBlob(b, `${fileStem()}_3d_az${Math.round(norm360(nv.scene.renderAzimuth))}.png`), "image/png");
+};
+
+async function capturePanorama(){
+  if (!need3D()) return;
+  if (ST3.recording){ toast("Wait for the 360° recording to finish."); return; }
+  stopOrbit();
+  const prevLayout = ST3.layout;
+  if (prevLayout !== "render") setLayout("render");
+  const choice = $("panoFrames").value;
+  const az0 = nv.scene.renderAzimuth, el0 = nv.scene.renderElevation;
+  // the view list: either the 6 orthogonal presets, or a ring of N views at the current tilt
+  let views;
+  if (choice === "ortho"){
+    views = ["A","P","L","R","S","I"].map(k=> ({az: VIEW_PRESETS[k][0], el: VIEW_PRESETS[k][1], label: VIEW_NAMES[k].toUpperCase()}));
+  } else {
+    const n = parseInt(choice, 10), start = VIEW_PRESETS.A[0];
+    views = Array.from({length:n}, (_, i)=>{
+      const az = norm360(start + i*360/n);
+      return {az, el: el0, label: `${viewLabel(az, el0)} · ${Math.round(az)}°`};
+    });
+  }
+  // keep the orientation cube / crosshair out of the tiles
+  const saved = {cube: nv.opts.isOrientCube, xh: nv.opts.show3Dcrosshair};
+  nv.opts.isOrientCube = false; nv.opts.show3Dcrosshair = false;
+  const btns = [$("pano3dBtn"), $("pano3dBtnBar")];
+  btns.forEach(b=> b.disabled = true);
+  const frames = [];
+  try{
+    for (let i=0; i<views.length; i++){
+      nv.setRenderAzimuthElevation(views[i].az, views[i].el);
+      const c = grab3DCanvas();
+      if (!c) throw new Error("frame grab failed");
+      frames.push(c);
+      $("status3d").textContent = `Capturing panorama… ${i+1}/${views.length}`;
+      await new Promise(r=> setTimeout(r, 0));   // keep the page responsive between frames
+    }
+  } catch(e){
+    toast("Panorama failed: "+e.message);
+    frames.length = 0;
+  } finally {
+    nv.opts.isOrientCube = saved.cube; nv.opts.show3Dcrosshair = saved.xh;
+    nv.setRenderAzimuthElevation(az0, el0);
+    if (prevLayout !== "render") setLayout(prevLayout);
+    btns.forEach(b=> b.disabled = false);
+    $("status3d").textContent = "Ready.";
+  }
+  if (!frames.length) return;
+
+  // one crop box shared by every frame (union of the rendered content), so all
+  // tiles have the same scale and none of the empty canvas margin
+  const bg = BG3D[ST3.bg].map(v=> Math.round(v*255));
+  let x0 = Infinity, y0 = Infinity, x1 = -1, y1 = -1;
+  frames.forEach(c=>{
+    const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
+    for (let y=0; y<c.height; y+=2) for (let x=0; x<c.width; x+=2){
+      const i = (y*c.width + x)*4;
+      if (Math.abs(d[i]-bg[0]) + Math.abs(d[i+1]-bg[1]) + Math.abs(d[i+2]-bg[2]) > 30){
+        if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+      }
+    }
+  });
+  if (x1 < 0){ x0 = 0; y0 = 0; x1 = frames[0].width-1; y1 = frames[0].height-1; }
+  const pad = 12;
+  x0 = Math.max(0, x0-pad); y0 = Math.max(0, y0-pad);
+  x1 = Math.min(frames[0].width-1, x1+pad); y1 = Math.min(frames[0].height-1, y1+pad);
+  const cw = x1-x0+1, ch = y1-y0+1;
+  const scale = Math.min(1.6, 380 / Math.max(cw, ch));   // tiles ~380 px on their long side
+  const TW = Math.round(cw*scale), TH = Math.round(ch*scale);
+
+  const n = frames.length;
+  const cols = n <= 4 ? n : (n === 6 ? 3 : n/2), rows = Math.ceil(n/cols);
+  const header = 30, gap = 4, labelH = 22;
+  const out = document.createElement("canvas");
+  out.width = cols*TW + (cols+1)*gap; out.height = header + rows*(TH+labelH) + (rows+1)*gap;
+  const ctx = out.getContext("2d");
+  const light = ST3.bg === "white";
+  ctx.fillStyle = light ? "#ffffff" : "#05060a"; ctx.fillRect(0, 0, out.width, out.height);
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = light ? "#111111" : "#ffb000"; ctx.font = "bold 14px Roboto Mono, monospace";
+  const modeName = {full:"full brain", isolate:"tumor isolation", restored:"brain restoration"}[ST3.mode] || ST3.mode;
+  const what = choice === "ortho" ? "6 orthogonal views" : `${n} views, elevation ${Math.round(el0)}°`;
+  ctx.fillText(`NeuroMPR 3D panorama · ${String(ST3.modality||"").toUpperCase()} · ${modeName} · ${what}`, gap+4, header/2+2);
+  frames.forEach((c, i)=>{
+    const col = i % cols, row = Math.floor(i/cols);
+    const x = gap + col*(TW+gap), y = header + gap + row*(TH+labelH+gap);
+    ctx.fillStyle = light ? "#ffffff" : BG3D_CSS[ST3.bg]; ctx.fillRect(x, y, TW, TH+labelH);
+    ctx.drawImage(c, x0, y0, cw, ch, x, y, TW, TH);
+    ctx.fillStyle = light ? "#1a1a6e" : "#9fe870"; ctx.font = "bold 12px Roboto Mono, monospace";
+    ctx.fillText(views[i].label, x+8, y+TH+labelH/2);
+  });
+  ST3.panorama = {
+    head: headVisible(),
+    dataUrl: out.toDataURL("image/jpeg", 0.9),
+    title: `3D panorama — ${what} (${String(ST3.modality||"").toUpperCase()}, ${modeName})`,
+    canvas: out,
+  };
+  $("panoPrev").src = ST3.panorama.dataUrl;
+  $("panoPrev").style.display = "block";
+  $("panoIncludeRow").style.display = "flex";
+  $("panoActions").style.display = "flex";
+  if (!$("drawer3d").classList.contains("show")) toggleDrawer(true);
+  toast(`Panorama captured (${n} views). It will be added to the diagnostic report.`);
+}
+function viewLabel(az, el){
+  // exact preset name, or the two neighbouring sides for oblique ring views ("ANT-RIGHT")
+  const exact = nearestViewName(az, el);
+  if (exact) return exact.toUpperCase();
+  const ring = ["P","L","A","R"].map(k=> [k, VIEW_PRESETS[k][0]]).sort((p, q)=> p[1]-q[1]);
+  for (let i=0; i<ring.length; i++){
+    const [k1, a1] = ring[i], [k2, a2r] = ring[(i+1) % ring.length];
+    const a2 = a2r <= a1 ? a2r + 360 : a2r, a = az < a1 ? az + 360 : az;
+    if (a > a1 && a < a2){
+      const pair = [k1, k2].sort((p, q)=> "AP".includes(p) ? -1 : ("AP".includes(q) ? 1 : 0));
+      const short = {A:"ANT", P:"POST", L:"LEFT", R:"RIGHT"};
+      return `${short[pair[0]]}-${short[pair[1]]}`;
+    }
+  }
+  return "";
+}
+$("pano3dBtn").onclick = capturePanorama;
+$("pano3dBtnBar").onclick = capturePanorama;
+$("panoDlBtn").onclick = ()=>{
+  if (!ST3.panorama) return;
+  ST3.panorama.canvas.toBlob(b=> downloadBlob(b, `${fileStem()}_panorama.png`), "image/png");
+};
+$("panoClearBtn").onclick = ()=> clearPanorama();
+function clearPanorama(){
+  ST3.panorama = null;
+  $("panoPrev").style.display = "none"; $("panoPrev").removeAttribute("src");
+  $("panoIncludeRow").style.display = "none"; $("panoActions").style.display = "none";
+};
+
+async function record360(){
+  if (!need3D()) return;
+  if (ST3.recording) return;
+  const canvas = $("niivueCanvas");
+  if (!window.MediaRecorder || !canvas.captureStream){ toast("This browser can't record canvas video (needs MediaRecorder)."); return; }
+  const mime = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"].find(m=> MediaRecorder.isTypeSupported(m));
+  if (!mime){ toast("No WebM encoder available in this browser."); return; }
+  stopOrbit(); ensureRenderLayout();
+  const btn = $("rec3dBtn");
+  ST3.recording = true; btn.disabled = true; btn.innerHTML = `<span class="recDot"></span>Recording…`;
+  const chunks = [];
+  try{
+    // frame-locked capture: captureStream(0) + requestFrame() after every redraw,
+    // so each of the 120 angles lands in the video even when a slow GPU can't
+    // render in real time (the clip just takes longer to record, never skips)
+    const stream = canvas.captureStream(0);
+    const track = stream.getVideoTracks()[0];
+    const rec = new MediaRecorder(stream, {mimeType: mime, videoBitsPerSecond: 6e6});
+    rec.ondataavailable = e=>{ if (e.data && e.data.size) chunks.push(e.data); };
+    const stopped = new Promise(r=> rec.onstop = r);
+    const az0 = nv.scene.renderAzimuth, el = nv.scene.renderElevation;
+    const N = 120, frameMs = 1000/15;          // 3° per frame -> one turn ≈ 8 s at 15 fps
+    rec.start(250);
+    for (let i=0; i<=N; i++){
+      const t = performance.now();
+      nv.setRenderAzimuthElevation(norm360(az0 + 360*i/N), el);
+      if (track.requestFrame) track.requestFrame();
+      await new Promise(r=> requestAnimationFrame(r));
+      const wait = frameMs - (performance.now() - t);
+      if (wait > 0) await new Promise(r=> setTimeout(r, wait));
+      if (i % 10 === 0) btn.innerHTML = `<span class="recDot"></span>Recording… ${Math.round(100*i/N)}%`;
+    }
+    await new Promise(r=> setTimeout(r, 300));    // let the last frames flush
+    rec.stop(); await stopped;
+    stream.getTracks().forEach(t=> t.stop());
+    nv.setRenderAzimuthElevation(az0, el);
+    if (!chunks.length) throw new Error("no video data captured");
+    downloadBlob(new Blob(chunks, {type: "video/webm"}), `${fileStem()}_360.webm`);
+    toast("360° clip saved (WebM).");
+  } catch(e){
+    toast("Recording failed: "+e.message);
+  } finally {
+    ST3.recording = false; btn.disabled = false; btn.textContent = "Record 360° clip";
+  }
+}
+$("rec3dBtn").onclick = record360;
+
+/* ---------- drawer ---------- */
+function toggleDrawer(force){
+  const d = $("drawer3d");
+  const show = typeof force === "boolean" ? force : !d.classList.contains("show");
+  d.classList.toggle("show", show);
+  $("tools3dBtn").classList.toggle("on", show);
+}
+$("tools3dBtn").onclick = ()=> toggleDrawer();
+
+/* ---------- fullscreen for the 3D panel ---------- */
+function toggleFullscreen3D(){
+  const el = $("vp-3d");
+  if (!isFullscreen3D()){
+    (el.requestFullscreen || el.webkitRequestFullscreen).call(el).catch(err => toast("Fullscreen failed: "+err.message));
+  } else {
+    (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+  }
+}
+$("fs3dBtn").onclick = toggleFullscreen3D;
+$("fs3dBtnInline").onclick = toggleFullscreen3D;
+["fullscreenchange","webkitfullscreenchange"].forEach(evt=>{
+  document.addEventListener(evt, ()=>{
+    const isFs = isFullscreen3D();
+    $("fs3dBtnInline").textContent = isFs ? "✕ Exit" : "⛶";
+    // Volume ray-casting cost scales with pixel count, and fullscreen is a much
+    // bigger raw pixel area than the 4-in-1 panel. A fractional forced pixel
+    // ratio shrinks the GPU render buffer below the CSS size (0.5 = a quarter of
+    // the pixels), and shading drops to its cheapest setting while fullscreen;
+    // the user's own shading value comes back on exit.
+    ST3.shadeTouchedInFs = false;
+    if (nv){
+      applyQuality();
+      applyShading();
+    }
+    setTimeout(()=>{ window.dispatchEvent(new Event("resize")); }, 80);
+  });
+});
+
+/* "Fast-nav" dynamic downscale: render fewer pixels only while the view moves
+   (drag-rotate, orbit), restore full quality the instant it stops. */
+function setDragQuality(dragging){ setInteractiveQuality(dragging); }
+const niivueCanvasEl = $("niivueCanvas");
+["mousedown","touchstart"].forEach(evt=>{
+  niivueCanvasEl.addEventListener(evt, ()=> setDragQuality(true), {passive:true});
+});
+["mouseup","touchend","touchcancel"].forEach(evt=>{
+  window.addEventListener(evt, ()=> setDragQuality(false), {passive:true});
+});
+
+/* ---------- atlas-fitted head: scalp + skull meshes ---------- */
+// geometry comes from the server (headmodel.py): real CT anatomy fitted to this
+// patient's brain, in the patient's own world millimetres, so niivue draws it in
+// register with the volume. Meshes are only added while a layer is switched on,
+// so a hidden head never changes the 3D zoom.
+const HM = { state:"", info:null, msg:"", pollTimer:0, cid:null,
+             parts:{skull:null, scalp:null}, meshes:{skull:null, scalp:null},
+             on:{skull:false, scalp:false}, op:{skull:1, scalp:1} };
+const HEAD_RGBA = { skull:[236,226,200,255], scalp:[222,170,140,255] };
+
+function resetHead(){
+  clearTimeout(HM.pollTimer);
+  removeHeadMeshes();
+  HM.parts = {skull:null, scalp:null};
+  HM.state = ""; HM.info = null; HM.msg = ""; HM.cid = null;
+  updateHeadUI();
+}
+function setHeadState(s){
+  if (!s) return;
+  HM.cid = ST.caseInfo && ST.caseInfo.case_id;
+  HM.state = s.state || ""; HM.info = s.info || null; HM.msg = s.message || "";
+  updateHeadUI();
+  if (HM.state === "running"){ clearTimeout(HM.pollTimer); HM.pollTimer = setTimeout(pollHeadModel, 900); }
+  else if (HM.state === "ready") syncHeadMeshes();
+}
+async function pollHeadModel(){
+  if (!ST.caseInfo) return;
+  const cid = ST.caseInfo.case_id;
+  try{
+    const j = await (await fetch(`/api/headmodel/${cid}`)).json();
+    if (!ST.caseInfo || ST.caseInfo.case_id !== cid) return;
+    setHeadState(j);
+  }catch(e){ HM.state = "error"; HM.msg = String(e); updateHeadUI(); }
+}
+function updateHeadUI(){
+  const st = $("hmState"), sec = $("headSec3d");
+  const txt = { running:["fitting to this brain…","busy"], ready:["ready","ok"], "n/a":["not applicable","bad"],
+                error:["failed","bad"], idle:["fitted when 3D opens",""], "":["",""] }[HM.state] || [HM.state, ""];
+  st.textContent = txt[0]; st.className = "hmState " + txt[1];
+  if (HM.state === "ready" && HM.info) st.title = `Atlas fit: Dice ${HM.info.dice}, head scale ${HM.info.scale}, ${HM.info.seconds}s`;
+  else st.title = HM.msg || "";
+  sec.classList.toggle("disabled", HM.state === "n/a" || HM.state === "error");
+  if (HM.state === "n/a" || HM.state === "error") $("hmHint").textContent = HM.msg || "Head model unavailable.";
+  $("scalpOn").checked = HM.on.scalp; $("skullOn").checked = HM.on.skull;
+  $("scalpBtn").classList.toggle("on", HM.on.scalp); $("skullBtn").classList.toggle("on", HM.on.skull);
+  $("scalpOp").value = Math.round(HM.op.scalp*100); $("scalpOpVal").textContent = Math.round(HM.op.scalp*100) + "%";
+  $("skullOp").value = Math.round(HM.op.skull*100); $("skullOpVal").textContent = Math.round(HM.op.skull*100) + "%";
+}
+async function fetchHeadPart(part){
+  if (HM.parts[part]) return HM.parts[part];
+  const r = await fetch(`/api/headmodel/${ST.caseInfo.case_id}/${part}.bin`);
+  if (!r.ok) throw new Error(`head model ${part}: HTTP ${r.status}`);
+  const buf = await r.arrayBuffer();
+  const h = new Uint32Array(buf, 0, 2);
+  HM.parts[part] = { pts: new Float32Array(buf, 8, h[0]*3), tris: new Uint32Array(buf, 8 + h[0]*12, h[1]*3), frac: null };
+  return HM.parts[part];
+}
+function removeHeadMeshes(){
+  ["skull","scalp"].forEach(part=>{
+    const m = HM.meshes[part];
+    if (m && nv){ try{ nv.removeMesh(m); }catch(e){} }
+    HM.meshes[part] = null;
+  });
+}
+let _headBusy = false;
+async function syncHeadMeshes(){
+  if (!has3D() || HM.state !== "ready" || _headBusy) return;
+  const want = HM.on.skull || HM.on.scalp;
+  if (!want){
+    if (HM.meshes.skull || HM.meshes.scalp){ removeHeadMeshes(); nv.drawScene(); updateMeta3d(); }
+    return;
+  }
+  _headBusy = true;
+  try{
+    for (const part of ["skull", "scalp"]){        // skull first, so a see-through scalp blends over it
+      if (HM.meshes[part]) continue;
+      const g = await fetchHeadPart(part);
+      if (!has3D()) return;
+      const m = new NVMesh(g.pts, g.tris, "atlas " + part, new Uint8Array(HEAD_RGBA[part]), HM.op[part], HM.on[part], nv.gl);
+      nv.addMesh(m);
+      HM.meshes[part] = m;
+    }
+    applyHeadProps();
+    applyHeadClip();
+    updateMeta3d();
+  }catch(e){
+    toast("Head model: " + e.message);
+  }finally{ _headBusy = false; }
+}
+function applyHeadProps(){
+  ["skull","scalp"].forEach(part=>{
+    const m = HM.meshes[part];
+    if (m){ m.visible = HM.on[part]; m.opacity = HM.op[part]; }
+  });
+  if (nv) nv.drawScene();
+}
+// mm -> niivue texture fraction is affine for the loaded volume: derive it from 4 points,
+// then cut the meshes with exactly the plane / box the volume renderer uses
+function headFrac(part){
+  const g = HM.parts[part];
+  if (g.frac) return g.frac;
+  const o = nv.mm2frac([0,0,0],0,true), ex = nv.mm2frac([1,0,0],0,true), ey = nv.mm2frac([0,1,0],0,true), ez = nv.mm2frac([0,0,1],0,true);
+  const ax = [0,1,2].map(k=> ex[k]-o[k]), ay = [0,1,2].map(k=> ey[k]-o[k]), az = [0,1,2].map(k=> ez[k]-o[k]);
+  const P = g.pts, n = P.length/3, f = new Float32Array(n*3);
+  for (let i=0; i<n; i++){
+    const x = P[3*i], y = P[3*i+1], z = P[3*i+2];
+    for (let k=0; k<3; k++) f[3*i+k] = o[k] + x*ax[k] + y*ay[k] + z*az[k];
+  }
+  return (g.frac = f);
+}
+let _clipRaf = 0;
+function scheduleHeadClip(){
+  if (!HM.meshes.skull && !HM.meshes.scalp) return;
+  if (_clipRaf) return;
+  _clipRaf = requestAnimationFrame(()=>{ _clipRaf = 0; applyHeadClip(); });
+}
+function applyHeadClip(){
+  if (!has3D()) return;
+  const c = ST3.clip, cr = ST3.crop;
+  const plane = c.on ? nv.scene.clipPlane : null;             // keep 0 <= n.(p-0.5)+d <= slab, as the ray caster does
+  const thick = c.on ? c.thick : 2;
+  const lo = cr.lo.map(v=> v > 0.001 ? v : -Infinity), hi = cr.hi.map(v=> v < 0.999 ? v : Infinity);
+  const cropOn = lo.some(v=> v > -Infinity) || hi.some(v=> v < Infinity);
+  const gl = nv.gl;
+  ["skull","scalp"].forEach(part=>{
+    const m = HM.meshes[part], g = HM.parts[part];
+    if (!m || !g) return;
+    let out = g.tris;
+    if (plane || cropOn){
+      const f = headFrac(part), T = g.tris, keep = new Uint32Array(T.length);
+      let n = 0;
+      for (let t=0; t<T.length; t+=3){
+        const a = 3*T[t], b = 3*T[t+1], d = 3*T[t+2];
+        const cx = (f[a]+f[b]+f[d])/3, cy = (f[a+1]+f[b+1]+f[d+1])/3, cz = (f[a+2]+f[b+2]+f[d+2])/3;
+        if (cropOn && (cx < lo[0] || cx > hi[0] || cy < lo[1] || cy > hi[1] || cz < lo[2] || cz > hi[2])) continue;
+        if (plane){
+          const sd = plane[0]*(cx-0.5) + plane[1]*(cy-0.5) + plane[2]*(cz-0.5) + plane[3];
+          if (sd < 0 || sd > thick) continue;
+        }
+        keep[n++] = T[t]; keep[n++] = T[t+1]; keep[n++] = T[t+2];
+      }
+      out = keep.subarray(0, n);
+    }
+    gl.bindVertexArray(m.vao);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, m.indexBuffer);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, out, gl.STATIC_DRAW);
+    gl.bindVertexArray(null);
+    m.indexCount = out.length;
+  });
+  nv.drawScene();
+}
+async function setHeadLayer(part, on){
+  HM.on[part] = on;
+  updateHeadUI();
+  if (on && !has3D()){ await render3D(); }
+  if (on && HM.state === "idle") await pollHeadModel();
+  if (HM.state === "running" && on) toast("Fitting the head model to this brain — it appears in a few seconds.");
+  if (HM.state === "n/a" || HM.state === "error"){ toast(HM.msg || "Head model unavailable for this study.", 5000); }
+  if (HM.meshes[part] || !on) applyHeadProps();
+  await syncHeadMeshes();
+}
+$("scalpOn").onchange = e=> setHeadLayer("scalp", e.target.checked);
+$("skullOn").onchange = e=> setHeadLayer("skull", e.target.checked);
+$("scalpBtn").onclick = ()=> setHeadLayer("scalp", !HM.on.scalp);
+$("skullBtn").onclick = ()=> setHeadLayer("skull", !HM.on.skull);
+[["scalpOp","scalp"],["skullOp","skull"]].forEach(([id, part])=>{
+  $(id).addEventListener("input", e=>{
+    HM.op[part] = parseInt(e.target.value,10)/100;
+    $(id+"Val").textContent = e.target.value + "%";
+    applyHeadProps();
+  });
+});
+const HEAD_PRESETS = {
+  opaque: {on:{scalp:true, skull:true},  op:{scalp:1.00, skull:1.00}},
+  glass:  {on:{scalp:true, skull:true},  op:{scalp:0.22, skull:0.40}},
+  skull:  {on:{scalp:false, skull:true}, op:{scalp:0.22, skull:0.55}},
+  off:    {on:{scalp:false, skull:false}, op:{scalp:1.00, skull:1.00}},
+};
+document.querySelectorAll("[data-headpreset]").forEach(b=> b.onclick = async ()=>{
+  const p = HEAD_PRESETS[b.dataset.headpreset];
+  HM.op = {...p.op}; HM.on = {...p.on};
+  updateHeadUI();
+  if ((p.on.scalp || p.on.skull) && !has3D()) await render3D();
+  if ((p.on.scalp || p.on.skull) && HM.state === "idle") await pollHeadModel();
+  applyHeadProps();
+  await syncHeadMeshes();
+  if (HM.state === "running" && (p.on.scalp || p.on.skull)) toast("Fitting the head model to this brain — it appears in a few seconds.");
+});
+function headVisible(){ return !!((HM.meshes.scalp && HM.on.scalp) || (HM.meshes.skull && HM.on.skull)); }
+
+/* ---------- render quality (pixel ratio), tuned to this PC ---------- */
+const QUALITY_DPR = { high:0, balanced:0.75, fast:0.5 };      // 0 = the screen's own pixel ratio
+let _interactive = false;
+function baseDpr(){
+  let d = QUALITY_DPR[ST3.qualityEff] ?? 0;
+  if (isFullscreen3D()) d = d === 0 ? 0.6 : Math.min(d, 0.5);   // fullscreen is many more pixels
+  return d;
+}
+function applyQuality(){
+  if (!nv) return;
+  const d = _interactive && ST3.dragLow ? Math.max(0.3, (baseDpr() || window.devicePixelRatio || 1) * 0.5) : baseDpr();
+  try{ nv.setHighResolutionCapable(d); }catch(e){}
+}
+function setInteractiveQuality(on){
+  if (!nv || _interactive === on) return;
+  _interactive = on;
+  if (ST3.dragLow) applyQuality();
+}
+function frameMs(n=3){
+  // Chrome's gl.finish() doesn't block; reading back one pixel does, so this times the real frame
+  const t = [], px = new Uint8Array(4), gl = nv.gl;
+  for (let i=0; i<n; i++){
+    const t0 = performance.now(); nv.drawScene(); gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); t.push(performance.now() - t0);
+  }
+  t.sort((a,b)=>a-b);
+  return t[Math.floor(n/2)];
+}
+function autoQuality(){
+  if (!has3D()) return;
+  ST3.qualityEff = "high"; applyQuality();
+  setTimeout(()=>{
+    const ms = frameMs(3);
+    ST3.qualityEff = ms > 70 ? "fast" : (ms > 32 ? "balanced" : "high");
+    ST3.measured = true;
+    try{ localStorage.setItem("neurompr.quality.auto", ST3.qualityEff); }catch(e){}
+    if (ST3.qualityEff === "fast" && ST3.loadedDs !== 2){ render3D().then(showFps); return; }
+    applyQuality();
+    showFps();
+  }, 120);
+}
+function showFps(){
+  if (!has3D()) return;
+  setTimeout(()=>{
+    const ms = frameMs(3);
+    $("fpsVal").textContent = `${ST3.quality === "auto" ? "auto → " + ST3.qualityEff + " · " : ""}~${Math.max(1, Math.round(1000/Math.max(ms,1)))} fps`;
+  }, 60);
+}
+$("quality3d").onchange = e=>{
+  ST3.quality = e.target.value;
+  try{ localStorage.setItem("neurompr.quality", ST3.quality); }catch(err){}
+  if (ST3.quality === "auto"){ ST3.measured = false; autoQuality(); return; }
+  ST3.qualityEff = ST3.quality;
+  if (has3D() && (ST3.qualityEff === "fast") !== (ST3.loadedDs === 2)){ render3D().then(showFps); return; }
+  applyQuality();
+  showFps();
+};
+$("dragLow").onchange = e=>{ ST3.dragLow = e.target.checked; applyQuality(); };
+try{
+  const q = localStorage.getItem("neurompr.quality");
+  if (q && q in {auto:1, high:1, balanced:1, fast:1}){ ST3.quality = q; $("quality3d").value = q; if (q !== "auto") ST3.qualityEff = q; }
+  const qa = localStorage.getItem("neurompr.quality.auto");
+  if (ST3.quality === "auto" && qa){ ST3.qualityEff = qa; ST3.measured = true; $("fpsVal").textContent = `auto → ${qa}`; }
+}catch(e){}
+
+/* initial UI state */
+syncClipUI(); syncCropUI(); syncTumorOpacityUI(); updateTumorSection(); updateHeadUI();
+$("cmap3d").innerHTML = `<option value="gray">gray</option>`;
+
+/* ============================== REPORT (versioned, stored in the archive) ============================== */
+const repScrim = document.getElementById("repScrim");
+const REP_FIELDS = ["referrer","radiologist","indication","technique","findings","impression","recommendations"];
+const REP = { history: [], latest: null };
+
+function setRepEditable(on){
+  REP_FIELDS.forEach(id=>{ document.getElementById("f-"+id).readOnly = !on; });
+}
+async function openReportModal(){
+  if (!ST.studyPk){ toast("Open a study first."); return; }
+  const st = ST.caseInfo.study;
+  document.getElementById("repInfo").innerHTML =
+    `<div><span class="lbl">Patient</span><b>${esc(st.patient_id)}</b> ${esc(st.patient_name || "(anonymised)")}`
+    + `${st.sex ? " · " + esc(st.sex) : ""}${st.birth_date ? " · DOB " + esc(fmtDate(st.birth_date)) : ""}</div>`
+    + `<div><span class="lbl">Study</span>${esc(fmtDate(st.study_date) || "date not recorded")} · ${esc(st.description)}</div>`
+    + `<div><span class="lbl">Accession</span>${esc(st.accession || "—")} <span class="lbl" style="margin-left:10px;">Series</span>${esc(st.series.map(s=>s.key.toUpperCase()).join(", "))}</div>`;
+  let rows = [];
+  try{ rows = await (await fetch(`/api/studies/${ST.studyPk}/reports`)).json(); }catch(e){}
+  REP.history = Array.isArray(rows) ? rows : [];
+  REP.latest = REP.history[0] || null;
+  const L = REP.latest;
+  const u = ST.user || {};
+  REP_FIELDS.forEach(id=>{ document.getElementById("f-"+id).value = (L && L.fields && L.fields[id]) || ""; });
+  if (!L){
+    document.getElementById("f-radiologist").value = u.full_name || u.username || "";
+    document.getElementById("f-technique").value = "Multi-parametric MRI brain (" + st.series.filter(s=>s.key!=="seg").map(s=>s.key.toUpperCase()).join(", ") + ")";
+  }
+  document.getElementById("f-addendum").value = "";
+  const locked = !!(L && (L.status === "final" || L.status === "addendum"));
+  const ro = !canEdit();
+  setRepEditable(!locked && !ro);
+  document.getElementById("addendumRow").style.display = locked && !ro ? "flex" : "none";
+  document.getElementById("repDraftBtn").style.display = (locked || ro) ? "none" : "flex";
+  document.getElementById("repPrelimBtn").style.display = (locked || ro) ? "none" : "flex";
+  document.getElementById("repFinalBtn").style.display = (locked || ro) ? "none" : "flex";
+  document.getElementById("repAddBtn").style.display = (locked && !ro) ? "flex" : "none";
+  const chip = document.getElementById("repStatus");
+  chip.className = "chip " + (L ? (L.status === "addendum" ? "final" : L.status) : "");
+  chip.textContent = L ? `v${L.version} · ${L.status}` : "new";
+  document.getElementById("repFootNote").textContent = ro ? "Read-only: your role can view reports but not write them."
+    : (locked ? "The final report is locked. Add an addendum for corrections." : "Prototype — not for clinical use");
+  const hist = document.getElementById("repHist");
+  hist.innerHTML = REP.history.length ? REP.history.map(h=>`<div><span>v${h.version} · <b>${esc(h.status)}</b> · ${esc(h.signed_by || h.author)} · ${new Date((h.signed_at || h.updated_at)*1000).toLocaleString()}</span>`
+      + (h.url ? `<a href="${esc(h.url)}" target="_blank">open</a>` : `<span class="miniNote">draft</span>`) + `</div>`).join("")
+    : `<div class="miniNote">No report yet.</div>`;
+  repScrim.classList.add("show");
+}
+document.getElementById("reportBtn").onclick = openReportModal;
+document.getElementById("repClose").onclick = ()=> repScrim.classList.remove("show");
+document.getElementById("repCancelBtn").onclick = ()=> repScrim.classList.remove("show");
+repScrim.addEventListener("click", e=>{ if (e.target===repScrim) repScrim.classList.remove("show"); });
+
+function captureViewport(plane){
+  const vp = VP[plane];
+  if (!vp.natW) return null;
+  const c = document.createElement("canvas");
+  c.width = vp.natW; c.height = vp.natH;
+  const ctx = c.getContext("2d");
+  ctx.drawImage(vp.img, 0,0);
+  ctx.drawImage(vp.canvas, 0,0);
+  return c.toDataURL("image/jpeg", 0.9);
+}
+function captureNiivue3D(){
+  const c = grab3DCanvas();   // see grab3DCanvas() in the 3D section for why this reads the framebuffer directly
+  return c ? c.toDataURL("image/jpeg", 0.92) : null;
+}
+function reportImages(){
+  const images = [];
+  PLANES.forEach(p=>{
+    const url = captureViewport(p);
+    if (url) images.push({title:`${p.charAt(0).toUpperCase()+p.slice(1)} (slice ${planeIndex(p)+1})`, data_url:url});
+  });
+  if (ST.lastPlot3d){
+    const url3d = captureNiivue3D();
+    if (url3d) images.push({title: "3D volume render" + (headVisible() ? " — scalp/skull: atlas-fitted model, not patient anatomy" : ""), data_url:url3d});
+  }
+  if (ST3.panorama && document.getElementById("panoInclude").checked){
+    images.push({title: ST3.panorama.title + (ST3.panorama.head ? " — scalp/skull: atlas-fitted" : ""), data_url: ST3.panorama.dataUrl, wide: true});
+  }
+  return images;
+}
+async function saveReport(action){
+  const fields = {};
+  REP_FIELDS.forEach(id=> fields[id] = document.getElementById("f-"+id).value);
+  if (action === "addendum") fields.addendum = document.getElementById("f-addendum").value;
+  if ((action === "preliminary" || action === "final") && !fields.findings.trim() && !fields.impression.trim()){
+    toast("Write findings or an impression before signing."); return;
+  }
+  if (action === "final" && !confirm("Sign the FINAL report? It will be locked; later changes go in an addendum.")) return;
+  const btns = ["repDraftBtn","repPrelimBtn","repFinalBtn","repAddBtn"].map(id=>document.getElementById(id));
+  btns.forEach(b=> b.disabled = true);
+  try{
+    const body = {action, fields,
+      measurements: ST.measurements.map(m=>({type:m.type, value:m.valueText, detail:m.detail, plane:m.plane, slice:m.sliceIndex+1}))};
+    if (action !== "draft") body.images = reportImages();
+    const r = await fetch(`/api/studies/${ST.studyPk}/reports`, {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)});
+    const j = await r.json();
+    if (j.error){ toast("Report: " + j.error, 5000); return; }
+    const newStatus = {draft:"draft", preliminary:"preliminary", final:"final", addendum:"final"}[action];
+    const order = ["unread","opened","draft","preliminary","final"];
+    if (order.indexOf(newStatus) > order.indexOf(ST.caseInfo.study.status)) ST.caseInfo.study.status = newStatus;
+    ST.caseInfo.study.reports = [{version:j.version, status:j.status}];
+    renderBanner(ST.caseInfo.study); renderStudyPanel(ST.caseInfo.study);
+    if (j.url) window.open(j.url, "_blank");
+    toast(action === "draft" ? `Draft saved (v${j.version}).` : `Report v${j.version} signed as ${j.status}.`);
+    if (action === "draft") openReportModal(); else repScrim.classList.remove("show");
+  }catch(e){
+    toast("Report error: " + e);
+  }finally{
+    btns.forEach(b=> b.disabled = false);
+  }
+}
+document.getElementById("repDraftBtn").onclick = ()=> saveReport("draft");
+document.getElementById("repPrelimBtn").onclick = ()=> saveReport("preliminary");
+document.getElementById("repFinalBtn").onclick = ()=> saveReport("final");
+document.getElementById("repAddBtn").onclick = ()=> saveReport("addendum");
+
+/* ============================== KEYBOARD ============================== */
+window.addEventListener("keydown", e=>{
+  if (["INPUT","TEXTAREA","SELECT"].includes(e.target.tagName)) return;
+  if (e.shiftKey && e.key.toLowerCase()==="f"){ toggleFullscreen3D(); return; }
+  if (e.key === "o" || e.key === "O"){ toggleOrbit(); return; }
+  if (e.key === "t" || e.key === "T"){ toggleDrawer(); return; }
+  if (e.key === "["){ const k = neighbourStudy(-1); if (k) openStudy(k); return; }
+  if (e.key === "]"){ const k = neighbourStudy(1); if (k) openStudy(k); return; }
+  const map = {w:"wl", p:"pan", z:"zoom", c:"crosshair", l:"length", r:"rect", e:"ellipse", x:"probe"};
+  if (map[e.key]){
+    ST.tool = map[e.key];
+    document.querySelectorAll("#toolGroup .tbtn").forEach(b=>b.classList.toggle("active", b.dataset.tool===ST.tool));
+  }
+});
+
+/* ============================== BOOT ============================== */
+initViewports();
+openStudy(new URLSearchParams(location.search).get("study"));
+})();
+</script>
+</body>
+</html>
